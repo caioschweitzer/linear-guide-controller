@@ -1,0 +1,146 @@
+{
+  "component": [
+    {
+      "template": "SRCS ***",
+      "regex": "(?:SRCS)([^)\n\r]*)",
+      "title": "Component Sources (SRCS)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "EXCLUDE_SRCS ***",
+      "regex": "(?:EXCLUDE_SRCS)([^)\n\r]*)",
+      "title": "Remove files from static library build (EXCLUDE_SRCS)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "LDFRAGMENTS ***",
+      "regex": "(?:LDFRAGMENTS)([^)\n\r]*)",
+      "title": "Linker fragment files (LDFRAGMENTS)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "EMBED_FILES ***",
+      "regex": "(?:EMBED_FILES)([^)\n\r]*)",
+      "title": "Binary files to be embedded in the component (EMBED_FILES)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "EMBED_TXTFILES ***",
+      "regex": "(?:EMBED_TXTFILES)([^)\n\r]*)",
+      "title": "Text files to be embedded in the component (EMBED_TXTFILES)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "INCLUDE_DIRS ***",
+      "regex": "(?:INCLUDE_DIRS)([^)\n\r]*)",
+      "title": "Relative paths to the components (INCLUDE_DIRS) for all other components",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "PRIV_INCLUDE_DIRS ***",
+      "regex": "(?:PRIV_INCLUDE_DIRS)([^)\n\r]*)",
+      "title": "Relative paths to the components (PRIV_INCLUDE_DIRS) for this component",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "REQUIRES ***",
+      "regex": "(?:REQUIRES)([^)\n\r]*)",
+      "title": "Public component requirements for the component (REQUIRES)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "REQUIRED_IDF_TARGETS ***",
+      "regex": "(?:REQUIRED_IDF_TARGETS)([^)\n\r]*)",
+      "title": "Specify the only target the component supports (REQUIRED_IDF_TARGETS)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    },
+    {
+      "template": "PRIV_REQUIRES ***",
+      "regex": "(?:PRIV_REQUIRES)([^)\n\r]*)",
+      "title": "Private component requirements for the component (PRIV_REQUIRES)",
+      "type": "array",
+      "value": [],
+      "isComponentElement": true,
+      "canHaveMany": false
+    }
+  ],
+  "project": [
+    {
+      "default": "VERSION 3.16",
+      "regex": "(?:cmake_minimum_required\\()(.*)(?:\\))",
+      "template": "cmake_minimum_required(***)",
+      "title": "CMake Minimum Requirement",
+      "type": "string",
+      "value": "VERSION 3.16",
+      "isComponentElement": false,
+      "canHaveMany": false,
+      "isFirst": true
+    },
+    {
+      "default": "$ENV{IDF_PATH}/tools/cmake/project.cmake",
+      "regex": "(?:include\\()(.*)(?:\\))",
+      "template": "include(***)",
+      "type": "string",
+      "title": "Include include(path)",
+      "value": "",
+      "isComponentElement": false,
+      "canHaveMany": true
+    },
+    {
+      "regex": "(?:project\\()(.*)(?:\\))",
+      "template": "project(***)",
+      "title": "Project Name",
+      "type": "string",
+      "value": "",
+      "isComponentElement": false,
+      "canHaveMany": false
+    },
+    {
+      "template": "SET(VARIABLE ***)",
+      "regex": "(?:set|SET)\\((.*) (.*)\\)",
+      "title": "Set variable with value set(VARIABLE \"VALUE\")",
+      "type": "set",
+      "value": [],
+      "variable": "",
+      "isComponentElement": false,
+      "canHaveMany": true
+    },
+    {
+      "template": "target_add_binary_data(VARIABLE *** TYPE)",
+      "regex": "target_add_binary_data\\((.*) (.*) (.*)\\)",
+      "title": "target_add_binary_data(target file BINARY|TEXT)",
+      "type": "binary_data",
+      "typeValue": "BINARY",
+      "value": "",
+      "variable": "",
+      "canHaveMany": true
+    }
+  ]
+}

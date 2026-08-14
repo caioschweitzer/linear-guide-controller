@@ -1,0 +1,77 @@
+{
+  "configurationSettings": {
+    "espIdfPath": "",
+    "customTerminalExecutable": "",
+    "customTerminalExecutableArgs": [],
+    "customOpenOcdPath": "",
+    "flashType": "",
+    "flashPartitionToUse": "all",
+    "idfExtraVars": {},
+    "userExtraVars": {
+      "IDF_TARGET": "esp32s3"
+    },
+    "notificationMode": "All",
+    "pythonBinPath": "",
+    "pythonPackages": [],
+    "serialPort": "detect",
+    "openOCDDebugLevel": 2,
+    "openOcdConfigs": [
+      "board/esp32s3-builtin.cfg"
+    ],
+    "openOcdLaunchArgs": [],
+    "toolsPath": "",
+    "systemEnvPath": "<HOMEPATH>/.local/bin:<HOMEPATH>/.local/bin:<HOMEPATH>/.local/bin:<HOMEPATH>/.nvm/versions/node/v24.15.0/bin:/usr/share/pyenv/shims:/usr/share/pyenv/bin:<HOMEPATH>/.local/bin:<HOMEPATH>/.local/bin:/usr/share/pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:<HOMEPATH>/.dotnet/tools",
+    "gitPath": "/usr/bin/git"
+  },
+  "configurationAccess": {
+    "espIdfPath": false,
+    "espAdfPath": false,
+    "espIdfToolsPaths": {},
+    "pythonBinPath": false,
+    "cmakeInEnv": true,
+    "ninjaInEnv": "",
+    "toolsPath": false
+  },
+  "configurationSpacesValidation": {
+    "customExtraPaths": {},
+    "espAdfPath": false,
+    "espIdfPath": false,
+    "gitPath": false,
+    "pythonBinPath": false,
+    "toolsPath": false,
+    "systemEnvPath": false
+  },
+  "espIdfSetups": [],
+  "espIdfVersion": {
+    "output": "x.x",
+    "result": "x.x"
+  },
+  "gitVersion": {
+    "output": "git version 2.51.0\n",
+    "result": "2.51.0"
+  },
+  "idfCheckRequirements": {},
+  "latestError": {
+    "code": "ERR_INVALID_ARG_VALUE"
+  },
+  "pipVersion": {
+    "result": "Not found"
+  },
+  "pythonPackages": {},
+  "pythonVersion": {
+    "result": "Not found"
+  },
+  "systemInfo": {
+    "architecture": "x64",
+    "envPath": "<HOMEPATH>/.local/bin:<HOMEPATH>/.local/bin:<HOMEPATH>/.local/bin:<HOMEPATH>/.nvm/versions/node/v24.15.0/bin:/usr/share/pyenv/shims:/usr/share/pyenv/bin:<HOMEPATH>/.local/bin:<HOMEPATH>/.local/bin:/usr/share/pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:<HOMEPATH>/.dotnet/tools",
+    "extensionVersion": "2.2.0",
+    "language": "en",
+    "shell": "/usr/bin/bash",
+    "platform": "linux",
+    "systemName": "6.17.0-41-generic",
+    "vscodeVersion": "1.133.0",
+    "appName": "Visual Studio Code"
+  },
+  "workspaceFolder": "<HOMEPATH>/workspace/controlador_guia_linear",
+  "projectConfigurations": {}
+}

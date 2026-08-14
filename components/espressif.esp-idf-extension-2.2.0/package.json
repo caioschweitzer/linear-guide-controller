@@ -1,0 +1,2725 @@
+{
+	"name": "esp-idf-extension",
+	"displayName": "ESP-IDF",
+	"description": "Develop and debug applications for Espressif chips with ESP-IDF",
+	"version": "2.2.0",
+	"license": "Apache-2.0",
+	"publisher": "espressif",
+	"icon": "media/espressif_icon.png",
+	"galleryBanner": {
+		"color": "#636363",
+		"theme": "dark"
+	},
+	"engines": {
+		"vscode": "^1.100.3"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/espressif/vscode-esp-idf-extension.git"
+	},
+	"categories": [
+		"Programming Languages",
+		"Snippets",
+		"Other",
+		"Debuggers"
+	],
+	"keywords": [
+		"arduino-esp32",
+		"bluetooth",
+		"ESP-IDF",
+		"ESP-ADF",
+		"ESP-matter",
+		"ESP",
+		"Espressif",
+		"ESP32",
+		"ESP32-C2",
+		"ESP32-C3",
+		"ESP32-H2",
+		"ESP32-P4",
+		"ESP32-S2",
+		"ESP32-S3",
+		"esp32",
+		"esp32c2",
+		"esp32c3",
+		"esp32c6",
+		"esp32h2",
+		"esp32s2",
+		"esp32s3",
+		"esp32p4",
+		"matter",
+		"iot",
+		"wifi",
+		"soc"
+	],
+	"activationEvents": [
+		"onCommand:espIdf.addArduinoAsComponentToCurFolder",
+		"onCommand:espIdf.createIdfTerminal",
+		"onCommand:espIdf.createVsCodeFolder",
+		"onCommand:espIdf.selectConfTarget",
+		"onCommand:espIdf.menuconfig.start",
+		"onCommand:espIdf.cmakeListsEditor.start",
+		"onCommand:espIdf.selectPort",
+		"onCommand:espIdf.setTarget",
+		"onCommand:espIdf.buildDevice",
+		"onCommand:espIdf.flashDevice",
+		"onCommand:espIdf.flashDFU",
+		"onCommand:espIdf.monitorDevice",
+		"onCommand:espIdf.pickAWorkspaceFolder",
+		"onCommand:espIdf.buildFlashMonitor",
+		"onCommand:espIdf.cleanProject",
+		"onCommand:espIdf.eraseFlash",
+		"onCommand:espIdf.size",
+		"onCommand:espIdf.fullClean",
+		"onCommand:espIdf.apptrace",
+		"onCommand:espIdf.heaptrace",
+		"onCommand:espIdf.openOCDCommand",
+		"onCommand:espIdf.openOcdAdapterStatusBar",
+		"onCommand:espIdf.apptrace.archive.refresh",
+		"onCommand:espIdf.apptrace.archive.showReport",
+		"onCommand:espIdf.apptrace.customize",
+		"onCommand:espIdf.getExtensionPath",
+		"onCommand:espIdf.getIDFTarget",
+		"onCommand:espIdf.getOpenOcdConfigs",
+		"onCommand:espIdf.genCoverage",
+		"onCommand:espIdf.partition.table.refresh",
+		"onCommand:espIdf.removeCoverage",
+		"onCommand:espIdf.searchInEspIdfDocs",
+		"onCommand:espIdf.welcome.start",
+		"onCommand:esp.rainmaker.backend.connect",
+		"onCommand:esp.rainmaker.backend.sync",
+		"onCommand:espIdf.getEspAdf",
+		"onCommand:esp.webview.open.partition-table",
+		"onCommand:espIdf.webview.nvsPartitionEditor",
+		"onCommand:espIdf.selectOpenOcdConfigFiles",
+		"onCommand:espIdf.doctorCommand",
+		"onCommand:espIdf.createNewComponent",
+		"onCommand:espIdf.ninja.summary",
+		"onCommand:espIdf.newProject.start",
+		"onCommand:espIdf.setGcovConfig",
+		"onCommand:esp.component-manager.ui.show",
+		"onCommand:espIdf.monitorQemu",
+		"onView:idfAppTracer",
+		"onView:idfAppTraceArchive",
+		"onView:idfPartitionExplorer",
+		"onView:espRainmaker",
+		"onView:idfComponents",
+		"onLanguageModelTool:espIdfCommands",
+		"onCommand:espIdf.openImageViewer",
+		"workspaceContains:**/CMakeLists.txt"
+	],
+	"main": "./dist/extension",
+	"l10n": "./l10n",
+	"contributes": {
+		"jsonValidation": [
+			{
+				"fileMatch": [
+					"CMakePresets.json",
+					"CMakeUserPresets.json"
+				],
+				"url": "./internal/com.espressif.idf.uploads/cmakepresets/esp-idf-cmakepresets-schema-v1.json"
+			}
+		],
+		"walkthroughs": [
+			{
+				"id": "espIdf.walkthrough.basic-usage",
+				"title": "ESP-IDF Basic Usage Guide",
+				"description": "Learn how to configure the ESP-IDF extension and use its basic features in VS Code",
+				"steps": [
+					{
+						"id": "introduction",
+						"title": "Introduction to ESP-IDF in VS Code",
+						"description": "This walkthrough will guide you through configuring the ESP-IDF extension and demonstrate its basic usage in Visual Studio Code.",
+						"media": {
+							"markdown": "walkthroughs/basic/basic-usage-intro.md"
+						}
+					},
+					{
+						"id": "extension-configuration",
+						"title": "Configuring the ESP-IDF Extension",
+						"description": "❗**Please review system prerequisites first. The process is quick and simple - follow the steps in our [ESP-IDF Installation Manager documentation](https://docs.espressif.com/projects/idf-im-ui/en/latest/prerequisites.html).\n\nOnce ready, let's install ESP-IDF:\n\n[ESP-IDF: Open ESP-IDF Installation Manager](command:espIdf.installManager)\n\n\n\nAfter that, run:\n\n[ESP-IDF: Select Current ESP-IDF Version](command:espIdf.selectCurrentIdfVersion)\n\n",
+						"media": {
+							"markdown": "walkthroughs/basic/configuration.md"
+						}
+					},
+					{
+						"id": "create-example-project",
+						"title": "Creating an Example Project",
+						"description": "Now, let's create a new project from ESP-IDF: New Project\n\n[ESP-IDF: New Project](command:espIdf.newProject.start)\n\n💡 Explore different examples to find one that suits your needs.",
+						"media": {
+							"markdown": "walkthroughs/basic/create-project.md"
+						}
+					},
+					{
+						"id": "setup-project",
+						"title": "Setting Up Your Project",
+						"description": "Before building your project, you'll need to configure some essential settings:\n\n1. Configure your target device\n\n[ESP-IDF: Set Espressif Device Target](command:espIdf.setTarget)\n2. Set up project-specific configurations (not needed in our example)\n3. Select serial port \n\n[ESP-IDF: Select Port to Use](command:espIdf.selectPort)\n4. Select flashing method \n\n[ESP-IDF: Select Flash Method](command:espIdf.selectFlashMethodAndFlash)",
+						"media": {
+							"markdown": "walkthroughs/basic/setup-project.md"
+						}
+					},
+					{
+						"id": "build-flash-monitor",
+						"title": "Building, Flashing, and Monitoring",
+						"description": "Now that your project is configured, let's build the code, flash it to your device, and monitor the output.\n\nYou can perform these operations individually or all at once using the 'Build, Flash and Monitor' command.\n\n[Build, Flash and Monitor](command:espIdf.buildFlashMonitor)",
+						"media": {
+							"markdown": "walkthroughs/basic/build-flash-monitor.md"
+						}
+					},
+					{
+						"id": "additional-resources-and-ui",
+						"title": "Additional Resources and UI Exploration",
+						"description": "As a next step, we recommend that you go through the Advanced Walkthrough as well.\n\n[Start Advanced Features Guide Walkthrough](command:workbench.action.openWalkthrough?%22espressif.esp-idf-extension%23espIdf.walkthrough.advanced%22)",
+						"media": {
+							"markdown": "walkthroughs/basic/additional-resources.md"
+						}
+					}
+				]
+			},
+			{
+				"id": "espIdf.walkthrough.advanced",
+				"title": "ESP-IDF Advanced Features Guide",
+				"description": "Explore advanced features and tools for ESP-IDF development in VS Code",
+				"steps": [
+					{
+						"id": "advanced-introduction",
+						"title": "Introduction to Advanced Features",
+						"description": "Overview of advanced ESP-IDF development capabilities.\n\n**Prerequisites:**\n - Completed the ESP-IDF Basic Usage Guide Walkthrough\n - Basic familiarity with ESP-IDF concepts\n - Have a working ESP-IDF setup\n - Have your development board ready\n - JTAG debugging hardware (for debugging features)",
+						"media": {
+							"markdown": "walkthroughs/advanced/advanced-intro.md"
+						}
+					},
+					{
+						"id": "troubleshooting",
+						"title": "Troubleshooting Guide",
+						"description": "Learn about common troubleshooting techniques and how to get help when you need it.\n\nKey features:\n- Debug logging configuration\n- Environment diagnostics\n- Log file locations\n- Common issues and solutions\n\n[ESP-IDF: Doctor Command](command:espIdf.doctorCommand)",
+						"media": {
+							"markdown": "walkthroughs/advanced/troubleshooting.md"
+						}
+					},
+					{
+						"id": "sdk-configuration",
+						"title": "SDK Configuration (menuconfig)",
+						"description": "Learn how to customize your project's configuration using menuconfig\nKey features:\n- Component configuration\n- Compiler options\n- Flash and partition settings\n- Serial port parameters\n\n💡 Tip: Use search bar to quickly find settings",
+						"media": {
+							"markdown": "walkthroughs/advanced/sdk-configuration.md"
+						}
+					},
+					{
+						"id": "debugging",
+						"title": "Debugging Your Application",
+						"description": "Learn how to debug your ESP-IDF applications using VS Code\n\nKey features:\n- Conditional breakpoints\n- Navigating through the code, call stack and threads\n- Halting the target manually\n- Watching and setting program variables\n- Disassembly view\n- Sending GDB Commands\n- Peripheral Viewer",
+						"media": {
+							"markdown": "walkthroughs/advanced/debug-project.md"
+						}
+					},
+					{
+						"id": "component-installation",
+						"title": "Installing ESP-IDF Components",
+						"description": "Learn how to enhance your project with ESP Component Registry and Arduino-ESP32 integration.\n\n- Browse and install ESP components\n- Add Arduino-ESP32 as a component\n- Create projects from component examples\n\n[ESP-IDF: Open ESP Component Registry](command:esp.component-manager.ui.show)",
+						"media": {
+							"markdown": "walkthroughs/advanced/component-installation.md"
+						}
+					},
+					{
+						"id": "app-size-analysis",
+						"title": "Application Size Analysis",
+						"description": "ESP-IDF Extension provides powerful tools to analyze your application's memory usage, helping you optimize storage allocation. \n\n[ESP-IDF: Size Analysis of the Binaries](command:espIdf.size)",
+						"media": {
+							"markdown": "walkthroughs/advanced/app-size-analysis.md"
+						}
+					},
+					{
+						"id": "partition-table",
+						"title": "Partition Table Configuration",
+						"description": "The Partition Table Editor provides a user-friendly interface to define and modify your ESP32's flash memory layout.\nKey features\n- Visual partition table editing interface\n- Automatic CSV file generation and management\n- Direct integration with ESP-IDF build systemReal-time validation of partition configurations\n\n[ESP-IDF: Open Partition Table Editor UI](command:esp.webview.open.partition-table)",
+						"media": {
+							"markdown": "walkthroughs/advanced/partition-table.md"
+						}
+					},
+					{
+						"id": "unit-testing",
+						"title": "Unit Testing",
+						"description": "Set up and run unit tests for your ESP-IDF projects.\n\n- Configure test environment\n- Write and run tests\n- Analyze test results",
+						"media": {
+							"markdown": "walkthroughs/advanced/unit-testing.md"
+						}
+					},
+					{
+						"id": "multi-project",
+						"title": "Multi-Project Management",
+						"description": "Learn to efficiently manage multiple ESP-IDF projects in a single workspace.",
+						"media": {
+							"markdown": "walkthroughs/advanced/multi-project.md"
+						}
+					},
+					{
+						"id": "conclusion",
+						"title": "Next Steps",
+						"description": "Congratulations! You've learned about essential advanced features of ESP-IDF development.\n\nNext steps:\n- Explore additional tools in ESP-IDF documentation\n- Join the ESP32 community forum\n- Check out example projects\n\n[Visit Our Documentation](https://docs.espressif.com/projects/vscode-esp-idf-extension/en/latest/additionalfeatures.html)",
+						"media": {
+							"markdown": "walkthroughs/advanced/advanced-conclusion.md"
+						}
+					}
+				]
+			}
+		],
+		"problemMatchers": [
+			{
+				"name": "espIdf",
+				"owner": "cpp",
+				"fileLocation": [
+					"autoDetect",
+					"${workspaceFolder}"
+				],
+				"pattern": {
+					"regexp": "^\\.?\\.?(.*?):(\\d+):(\\d*):?\\s+(?:fatal\\s+)?(warning|error):\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				},
+				"source": "esp-idf"
+			},
+			{
+				"name": "espIdfLd",
+				"owner": "cpp",
+				"fileLocation": [
+					"autoDetect",
+					"${workspaceFolder}"
+				],
+				"severity": "error",
+				"pattern": {
+					"regexp": "^.+\\/bin\\/ld[^:]+:\\s*(.+):(\\d+):(.+)$",
+					"file": 1,
+					"line": 2,
+					"message": 3
+				},
+				"source": "esp-idf"
+			}
+		],
+		"viewsContainers": {
+			"panel": [
+				{
+					"id": "espIdfHints",
+					"title": "ESP-IDF",
+					"icon": "media/dep.svg"
+				}
+			],
+			"activitybar": [
+				{
+					"id": "idfViewController",
+					"title": "%viewContainer.title%",
+					"icon": "media/esp.svg"
+				}
+			]
+		},
+		"views": {
+			"espIdfHints": [
+				{
+					"id": "espIdf.errorHints",
+					"name": "%view.idf.errorHints%",
+					"title": "%view.idf.errorHints% ($espIdf.errorHints.count$)"
+				}
+			],
+			"debug": [
+				{
+					"name": "%view.debug.peripheral%",
+					"id": "espIdf.peripheralView"
+				},
+				{
+					"name": "%view.debug.hexView%",
+					"id": "espIdf.hexView"
+				}
+			],
+			"idfViewController": [
+				{
+					"id": "idfCommands",
+					"name": "%view.idf.idfCommands%",
+					"visibility": "visible"
+				},
+				{
+					"id": "idfSearchResults",
+					"name": "%view.idf.idfSearchResults%",
+					"visibility": "collapsed"
+				},
+				{
+					"id": "idfPartitionExplorer",
+					"name": "%view.idf.idfPartitionExplorer%",
+					"visibility": "collapsed"
+				},
+				{
+					"id": "idfAppTracer",
+					"name": "%view.idf.idfAppTracer%",
+					"visibility": "collapsed"
+				},
+				{
+					"id": "idfAppTraceArchive",
+					"name": "%view.idf.idfAppTraceArchive%",
+					"visibility": "collapsed"
+				},
+				{
+					"id": "espRainmaker",
+					"name": "%view.idf.espRainmaker%",
+					"visibility": "collapsed"
+				},
+				{
+					"id": "espEFuseExplorer",
+					"name": "%view.idf.espEFuseExplorer%",
+					"visibility": "collapsed"
+				}
+			],
+			"explorer": [
+				{
+					"id": "idfComponents",
+					"name": "%view.components.name%"
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "idfSearchResults",
+				"contents": "%viewWelcome.idfSearchResults%"
+			},
+			{
+				"view": "idfPartitionExplorer",
+				"contents": "%viewWelcome.idfPartitionExplorer%"
+			},
+			{
+				"view": "espIdf.peripheralView",
+				"contents": "%viewWelcome.peripheralView%"
+			}
+		],
+		"menus": {
+			"extension/context": [
+				{
+					"command": "espIdf.openWalkthrough",
+					"when": "extension =~ /^espressif.esp-idf-extension$/ && extensionStatus == installed",
+					"group": "zzz"
+				}
+			],
+			"editor/title": [
+				{
+					"command": "espIdf.searchError",
+					"group": "navigation"
+				}
+			],
+			"view/title": [
+				{
+					"command": "espIdf.errorHints.clearAll",
+					"when": "view == espIdf.errorHints",
+					"group": "navigation"
+				},
+				{
+					"command": "espIdf.searchError",
+					"group": "navigation",
+					"when": "view == espIdf.errorHints"
+				},
+				{
+					"command": "espIdf.partition.table.refresh",
+					"group": "navigation",
+					"when": "view == idfPartitionExplorer"
+				},
+				{
+					"command": "esp.webview.open.partition-table",
+					"group": "navigation@2",
+					"when": "view == idfPartitionExplorer"
+				},
+				{
+					"command": "espIdf.apptrace.customize",
+					"when": "view == idfAppTracer"
+				},
+				{
+					"command": "espIdf.apptrace.archive.refresh",
+					"group": "navigation",
+					"when": "view == idfAppTraceArchive"
+				},
+				{
+					"command": "esp.rainmaker.backend.connect",
+					"group": "navigation",
+					"when": "view == espRainmaker && !rainmaker_logged_in"
+				},
+				{
+					"command": "esp.rainmaker.backend.sync",
+					"group": "navigation",
+					"when": "view == espRainmaker"
+				},
+				{
+					"command": "espIdf.clearDocsSearchResult",
+					"group": "navigation",
+					"when": "view == idfSearchResults"
+				},
+				{
+					"command": "esp.efuse.summary",
+					"group": "navigation",
+					"when": "view == espEFuseExplorer"
+				},
+				{
+					"command": "espIdf.efuse.clearResults",
+					"group": "navigation",
+					"when": "view == espEFuseExplorer"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "espIdf.errorHints.clearBuildErrors",
+					"when": "view == espIdf.errorHints && viewItem == buildError"
+				},
+				{
+					"command": "espIdf.errorHints.clearOpenOCDErrors",
+					"when": "view == espIdf.errorHints && viewItem == openocdError"
+				},
+				{
+					"command": "esp.rainmaker.backend.logout",
+					"when": "view == espRainmaker && viewItem == account",
+					"group": "inline"
+				},
+				{
+					"command": "esp.rainmaker.backend.add_node",
+					"when": "view == espRainmaker && viewItem == account",
+					"group": "inline"
+				},
+				{
+					"command": "esp.rainmaker.backend.remove_node",
+					"when": "view == espRainmaker && viewItem == node",
+					"group": "inline"
+				},
+				{
+					"command": "esp.rainmaker.backend.update_node_param",
+					"when": "view == espRainmaker && viewItem == param",
+					"group": "inline"
+				},
+				{
+					"command": "espIdf.hexView.copyValue",
+					"when": "view == espIdf.hexView && viewItem == debugHexItem",
+					"group": "inline"
+				},
+				{
+					"command": "espIdf.hexView.deleteElement",
+					"when": "view == espIdf.hexView && viewItem == debugHexItem",
+					"group": "inline"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "espIdf.searchError"
+				},
+				{
+					"command": "espIdf.searchInEspIdfDocs",
+					"group": "navigation",
+					"when": "editorHasSelection"
+				}
+			],
+			"explorer/context": [
+				{
+					"when": "resourceFilename == sdkconfig",
+					"command": "espIdf.menuconfig.start",
+					"group": "navigation"
+				},
+				{
+					"when": "resourceFilename == CMakeLists.txt || resourceFilename =~ /^sdkconfig.*$/",
+					"command": "espIdf.saveDefSdkconfig",
+					"group": "2_workspace"
+				},
+				{
+					"when": "resourceExtname == .bin",
+					"group": "navigation",
+					"command": "espIdf.flashBinaryToPartition"
+				},
+				{
+					"when": "resourceExtname == .csv",
+					"group": "navigation",
+					"command": "espIdf.webview.nvsPartitionEditor"
+				},
+				{
+					"when": "resourceExtname == .csv",
+					"group": "navigation",
+					"command": "esp.webview.open.partition-table"
+				},
+				{
+					"when": "resourceFilename == CMakeLists.txt",
+					"command": "espIdf.cmakeListsEditor.start",
+					"group": "navigation"
+				}
+			],
+			"debug/variables/context": [
+				{
+					"command": "espIdf.viewAsHex",
+					"when": "inDebugMode && debugType == 'gdbtarget' && debugState == stopped",
+					"group": "navigation"
+				},
+				{
+					"command": "espIdf.viewVariableAsImage",
+					"when": "inDebugMode && debugType == 'gdbtarget' && debugState == stopped",
+					"group": "navigation"
+				}
+			]
+		},
+		"keybindings": [
+			{
+				"command": "espIdf.fullClean",
+				"key": "ctrl+e x",
+				"mac": "cmd+i x"
+			},
+			{
+				"command": "espIdf.eraseFlash",
+				"key": "ctrl+e r",
+				"mac": "cmd+i r"
+			},
+			{
+				"command": "espIdf.buildDevice",
+				"key": "ctrl+e b",
+				"mac": "cmd+i b"
+			},
+			{
+				"command": "espIdf.flashDevice",
+				"key": "ctrl+e f",
+				"mac": "cmd+i f"
+			},
+			{
+				"command": "espIdf.monitorDevice",
+				"key": "ctrl+e m",
+				"mac": "cmd+i m"
+			},
+			{
+				"command": "espIdf.newProject.start",
+				"key": "ctrl+e n",
+				"mac": "cmd+i n"
+			},
+			{
+				"command": "espIdf.createIdfTerminal",
+				"key": "ctrl+e t",
+				"mac": "cmd+i t"
+			},
+			{
+				"command": "espIdf.createClassicMenuconfig",
+				"key": "ctrl+e ctrl+g",
+				"mac": "cmd+i cmd+g"
+			},
+			{
+				"command": "espIdf.selectPort",
+				"key": "ctrl+e p",
+				"mac": "cmd+i p"
+			},
+			{
+				"command": "espIdf.buildFlashMonitor",
+				"key": "ctrl+e d",
+				"mac": "cmd+i d"
+			},
+			{
+				"command": "espIdf.menuconfig.start",
+				"key": "ctrl+e g",
+				"mac": "cmd+i g"
+			},
+			{
+				"command": "espIdf.size",
+				"key": "ctrl+e s",
+				"mac": "cmd+i s"
+			},
+			{
+				"command": "espIdf.searchInEspIdfDocs",
+				"key": "ctrl+e q",
+				"mac": "cmd+i q"
+			},
+			{
+				"command": "espIdf.customTask",
+				"key": "ctrl+e j",
+				"mac": "cmd+i j"
+			}
+		],
+		"configuration": [
+			{
+				"title": "%configuration.section.setup%",
+				"properties": {
+					"idf.extensionActivationMode": {
+						"type": "string",
+						"default": "detect",
+						"enum": [
+							"detect",
+							"always",
+							"never"
+						],
+						"enumDescriptions": [
+							"%param.extensionActivationMode.enum.detect%",
+							"%param.extensionActivationMode.enum.always%",
+							"%param.extensionActivationMode.enum.never%"
+						],
+						"description": "%param.extensionActivationMode%",
+						"scope": "resource"
+					},
+					"idf.eimIdfJsonPath": {
+						"type": "string",
+						"default": "",
+						"description": "%param.eimIdfJsonPath%",
+						"scope": "application"
+					},
+					"idf.eimExecutableArgs": {
+						"type": "array",
+						"default": [
+							"gui",
+							"--idf-features ide"
+						],
+						"description": "%param.eimExecutableArgs%",
+						"scope": "application"
+					},
+					"idf.currentSetup": {
+						"type": "string",
+						"default": "",
+						"description": "%param.currentSetup%",
+						"scope": "resource"
+					},
+					"idf.saveLastProjectConfiguration": {
+						"type": "boolean",
+						"default": true,
+						"scope": "resource",
+						"description": "%param.saveLastProjectConfiguration%"
+					},
+					"idf.gitPath": {
+						"type": "string",
+						"description": "%param.gitPath.title%",
+						"scope": "application",
+						"default": "/usr/bin/git"
+					},
+					"idf.gitPathWin": {
+						"type": "string",
+						"description": "%param.gitPath.title%",
+						"scope": "application",
+						"default": "${env:programfiles}\\Git\\cmd\\git.exe"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.serialPort%",
+				"properties": {
+					"idf.port": {
+						"type": "string",
+						"default": "detect",
+						"description": "%param.port%",
+						"scope": "resource"
+					},
+					"idf.portWin": {
+						"type": "string",
+						"default": "detect",
+						"description": "%param.port%",
+						"scope": "resource"
+					},
+					"idf.monitorPort": {
+						"type": "string",
+						"default": "",
+						"description": "%param.port%",
+						"scope": "resource"
+					},
+					"idf.flashBaudRate": {
+						"type": "string",
+						"default": "460800",
+						"description": "%param.flashBaudRate%",
+						"scope": "resource"
+					},
+					"idf.monitorBaudRate": {
+						"type": "string",
+						"default": "",
+						"description": "%param.monitorBaudRate%",
+						"scope": "resource"
+					},
+					"idf.enableSerialPortChipIdRequest": {
+						"type": "boolean",
+						"scope": "application",
+						"default": true,
+						"description": "%param.enableSerialPortChipIdRequest.title%"
+					},
+					"idf.useSerialPortVendorProductFilter": {
+						"type": "boolean",
+						"scope": "application",
+						"default": false,
+						"description": "%param.useSerialPortVendorProductFilter.title%"
+					},
+					"idf.usbSerialPortFilters": {
+						"type": "object",
+						"scope": "application",
+						"description": "%param.usbSerialPortFilters.title%",
+						"additionalProperties": {
+							"type": "object",
+							"properties": {
+								"vendorId": {
+									"type": "string",
+									"description": "%param.usbSerialPortFilters.vendorId%"
+								},
+								"productId": {
+									"type": "string",
+									"description": "%param.usbSerialPortFilters.productId%"
+								}
+							},
+							"additionalProperties": false
+						},
+						"default": {
+							"CP2102/CP2102N": {
+								"vendorId": "0x10c4",
+								"productId": "0xea60"
+							},
+							"FT2232H": {
+								"vendorId": "0x0403",
+								"productId": "0x6010"
+							},
+							"Espressif USB_SERIAL_JTAG": {
+								"vendorId": "0x303a",
+								"productId": "0x1001"
+							},
+							"Espressif esp-usb-bridge firmware": {
+								"vendorId": "0x303a",
+								"productId": "0x1002"
+							},
+							"ESP32-S2 USB_CDC": {
+								"vendorId": "0x303a",
+								"productId": "0x0002"
+							},
+							"ESP32-S3 USB_CDC": {
+								"vendorId": "0x303a",
+								"productId": "0x0009"
+							},
+							"CH9102F": {
+								"vendorId": "0x1a86",
+								"productId": "0x55d4"
+							},
+							"CH340T": {
+								"vendorId": "0x1a86",
+								"productId": "0x7523"
+							},
+							"FT232R": {
+								"vendorId": "0x0403",
+								"productId": "0x6001"
+							}
+						}
+					},
+					"idf.serialPortDetectionTimeout": {
+						"type": "number",
+						"default": 60,
+						"scope": "resource",
+						"description": "%param.serialPortDetectionTimeout%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.flash%",
+				"properties": {
+					"idf.openOcdConfigs": {
+						"type": "array",
+						"default": [
+							"interface/ftdi/esp32_devkitj_v1.cfg",
+							"board/esp32-wrover.cfg"
+						],
+						"description": "%param.openOcdConfigFilesList%",
+						"scope": "resource",
+						"items": {
+							"type": "string"
+						}
+					},
+					"idf.flashType": {
+						"type": "string",
+						"enum": [
+							"UART",
+							"JTAG",
+							"DFU"
+						],
+						"description": "%idf.flashType.description%",
+						"scope": "resource"
+					},
+					"idf.flashPartitionToUse": {
+						"type": "string",
+						"enum": [
+							"all",
+							"app",
+							"bootloader",
+							"partition-table"
+						],
+						"default": "all",
+						"description": "%param.flashPartitionToUse%",
+						"scope": "resource"
+					},
+					"idf.jtagFlashCommandExtraArgs": {
+						"type": "array",
+						"description": "%param.jtagFlashCommandExtraArgs.title%",
+						"scope": "resource",
+						"default": [
+							"verify",
+							"compress",
+							"reset"
+						],
+						"items": {
+							"type": "string"
+						}
+					},
+					"idf.preFlashTask": {
+						"type": "string",
+						"default": "",
+						"scope": "resource",
+						"description": "%param.preFlashTask%"
+					},
+					"idf.postFlashTask": {
+						"type": "string",
+						"default": "",
+						"scope": "resource",
+						"description": "%param.postFlashTask%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.build%",
+				"properties": {
+					"idf.buildPath": {
+						"type": "string",
+						"default": "${workspaceFolder}/build",
+						"description": "%param.buildPath%",
+						"scope": "resource"
+					},
+					"idf.buildPathWin": {
+						"type": "string",
+						"default": "${workspaceFolder}\\build",
+						"description": "%param.buildPath%",
+						"scope": "resource"
+					},
+					"idf.cmakeCompilerArgs": {
+						"type": "array",
+						"default": [
+							"-G",
+							"Ninja",
+							"-DPYTHON_DEPS_CHECKED=1",
+							"-DESP_PLATFORM=1"
+						],
+						"description": "%param.cmakeCompilerArgs%",
+						"scope": "resource",
+						"items": {
+							"type": "string"
+						}
+					},
+					"idf.sdkconfigDefaults": {
+						"type": "array",
+						"default": [],
+						"description": "%param.sdkconfigDefaults%",
+						"scope": "resource",
+						"items": {
+							"type": "string"
+						}
+					},
+					"idf.ninjaArgs": {
+						"type": "array",
+						"default": [],
+						"description": "%param.ninjaArgs%",
+						"scope": "resource",
+						"items": {
+							"type": "string"
+						}
+					},
+					"idf.customExtraVars": {
+						"description": "%param.exportVars%",
+						"scope": "resource",
+						"type": "object",
+						"default": {},
+						"additionalProperties": {
+							"type": "string",
+							"description": "Env value"
+						}
+					},
+					"idf.useIDFKconfigStyle": {
+						"type": "boolean",
+						"default": false,
+						"scope": "resource",
+						"description": "%param.useIDFKConfigStyle%"
+					},
+					"idf.saveBeforeBuild": {
+						"type": "boolean",
+						"default": true,
+						"scope": "resource",
+						"description": "%param.saveBeforeBuildDescription%"
+					},
+					"idf.enableCCache": {
+						"type": "boolean",
+						"description": "%param.enableCCache.title%",
+						"scope": "resource",
+						"default": false
+					},
+					"idf.extraCleanPaths": {
+						"type": "array",
+						"default": [],
+						"scope": "resource",
+						"description": "%param.extraCleanPaths%",
+						"items": {
+							"type": "string"
+						}
+					},
+					"idf.sdkconfigFilePath": {
+						"type": "string",
+						"description": "%param.sdkconfigFilePath.title%",
+						"scope": "resource",
+						"default": ""
+					},
+					"idf.enableSizeTaskAfterBuildTask": {
+						"type": "boolean",
+						"description": "%param.enableSizeTaskAfterBuildTask.title%",
+						"scope": "resource",
+						"default": true
+					},
+					"idf.preBuildTask": {
+						"type": "string",
+						"default": "",
+						"scope": "resource",
+						"description": "%param.preBuildTask%"
+					},
+					"idf.postBuildTask": {
+						"type": "string",
+						"default": "",
+						"scope": "resource",
+						"description": "%param.postBuildTask%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.debugOpenOcd%",
+				"properties": {
+					"openocd.tcl.host": {
+						"type": "string",
+						"description": "%openocd.tcl.host.description%",
+						"scope": "resource",
+						"default": "localhost"
+					},
+					"openocd.tcl.port": {
+						"type": "number",
+						"description": "%openocd.tcl.port.description%",
+						"scope": "resource",
+						"default": 6666
+					},
+					"openocd.jtag.command.force_unix_path_separator": {
+						"type": "boolean",
+						"description": "%openocd.jtag.command.force_unix_path_separator.description%",
+						"default": true
+					},
+					"idf.launchMonitorOnDebugSession": {
+						"type": "boolean",
+						"description": "%param.launchMonitorOnDebugSession.title%",
+						"scope": "resource",
+						"default": false
+					},
+					"idf.openOcdDebugLevel": {
+						"type": "number",
+						"default": 2,
+						"enum": [
+							0,
+							1,
+							2,
+							3,
+							4
+						],
+						"enumDescriptions": [
+							"Error",
+							"Warning",
+							"Info",
+							"Debug",
+							"Verbose"
+						],
+						"scope": "resource",
+						"description": "%param.openOcdDebugLevel%"
+					},
+					"idf.customOpenOCDPath": {
+						"type": "string",
+						"default": "",
+						"description": "%param.customOpenOCDPath%",
+						"scope": "resource"
+					},
+					"idf.openOcdLaunchArgs": {
+						"type": "array",
+						"default": [],
+						"description": "%param.openOcdLaunchArgs%",
+						"scope": "resource",
+						"items": {
+							"type": "string"
+						}
+					},
+					"idf.svdFilePath": {
+						"type": "string",
+						"default": "${workspaceFolder}/esp32.svd",
+						"scope": "resource",
+						"description": "%param.svdFile%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.monitor%",
+				"properties": {
+					"idf.monitorDelay": {
+						"type": "number",
+						"default": 1000,
+						"scope": "resource",
+						"description": "%param.monitorDelay%"
+					},
+					"idf.monitorNoReset": {
+						"type": "boolean",
+						"default": false,
+						"scope": "resource",
+						"description": "%param.monitorNoReset%"
+					},
+					"idf.monitorEnableTimestamps": {
+						"type": "boolean",
+						"default": false,
+						"scope": "resource",
+						"description": "%param.monitorEnableTimestamps%"
+					},
+					"idf.monitorCustomTimestampFormat": {
+						"type": "string",
+						"default": "",
+						"scope": "resource",
+						"description": "%param.monitorCustomTimestampFormat%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.appTrace%",
+				"properties": {
+					"trace.poll_period": {
+						"type": "number",
+						"default": 0,
+						"scope": "resource",
+						"description": "%trace.poll_period.description%"
+					},
+					"trace.trace_size": {
+						"type": "number",
+						"default": 2048,
+						"scope": "resource",
+						"description": "%trace.trace_size.description%"
+					},
+					"trace.stop_tmo": {
+						"type": "number",
+						"default": 3,
+						"scope": "resource",
+						"description": "%trace.stop_tmo.description%"
+					},
+					"trace.wait4halt": {
+						"type": "number",
+						"default": 0,
+						"enum": [
+							0,
+							1
+						],
+						"scope": "resource",
+						"description": "%trace.wait4halt.description%"
+					},
+					"trace.skip_size": {
+						"type": "number",
+						"default": 0,
+						"scope": "resource",
+						"description": "%trace.skip_size.description%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.tasksTerminal%",
+				"properties": {
+					"idf.customTask": {
+						"type": "string",
+						"default": "",
+						"scope": "resource",
+						"description": "%param.customTask%"
+					},
+					"idf.customTerminalExecutable": {
+						"type": "string",
+						"description": "%param.customTerminalExecutable.title%",
+						"scope": "resource",
+						"default": ""
+					},
+					"idf.customTerminalExecutableArgs": {
+						"type": "array",
+						"description": "%param.customTerminalExecutableArgs.title%",
+						"scope": "resource",
+						"default": [],
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.uiNotifications%",
+				"properties": {
+					"idf.showOnboardingOnInit": {
+						"type": "boolean",
+						"default": true,
+						"scope": "window",
+						"description": "%param.showOnboardingOnInit%"
+					},
+					"idf.hasWalkthroughBeenShown": {
+						"type": "boolean",
+						"default": false,
+						"scope": "application",
+						"description": "%param.hasWalkthroughBeenShown%"
+					},
+					"idf.notificationMode": {
+						"type": "string",
+						"scope": "resource",
+						"enum": [
+							"Silent",
+							"Notifications",
+							"Output",
+							"All"
+						],
+						"enumDescriptions": [
+							"%param.notificationMode.silent%",
+							"%param.notificationMode.notification%",
+							"%param.notificationMode.output%",
+							"%param.notificationMode.all%"
+						],
+						"default": "All",
+						"description": "%param.notificationMode%"
+					},
+					"idf.saveScope": {
+						"type": "number",
+						"default": 1,
+						"enum": [
+							1,
+							2,
+							3
+						],
+						"enumItemLabels": [
+							"Global",
+							"Workspace",
+							"WorkspaceFolder"
+						],
+						"enumDescriptions": [
+							"Global",
+							"Workspace",
+							"WorkspaceFolder"
+						],
+						"description": "%param.saveScope%",
+						"scope": "application"
+					},
+					"idf.enableStatusBar": {
+						"type": "boolean",
+						"description": "%param.enableStatusBar.title%",
+						"scope": "resource",
+						"default": true
+					},
+					"idf.enableUpdateSrcsToCMakeListsFile": {
+						"type": "boolean",
+						"description": "%param.enableUpdateSrcsToCMakeListsFile%",
+						"scope": "window",
+						"default": true
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.telemetry%",
+				"properties": {
+					"idf.telemetry": {
+						"type": "boolean",
+						"default": true,
+						"description": "%param.telemetry%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.rainmaker%",
+				"properties": {
+					"esp.rainmaker.api.server_url": {
+						"type": "string",
+						"default": "https://api.rainmaker.espressif.com/v1/",
+						"scope": "resource",
+						"description": "%param.rainmaker.api.server_url%"
+					},
+					"esp.rainmaker.oauth.url": {
+						"type": "string",
+						"default": "https://auth.rainmaker.espressif.com/oauth2/authorize",
+						"scope": "resource",
+						"description": "%param.esp.rainmaker.oauth.url%"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.coverage%",
+				"properties": {
+					"idf.coveredLightTheme": {
+						"type": "string",
+						"default": "rgba(0,128,0,0.1)",
+						"description": "%param.coveredLightTheme%",
+						"scope": "resource"
+					},
+					"idf.partialDarkTheme": {
+						"type": "string",
+						"default": "rgba(250,218,94,0.1)",
+						"description": "%param.partialDarkTheme%",
+						"scope": "resource"
+					},
+					"idf.partialLightTheme": {
+						"type": "string",
+						"default": "rgba(250,218,94,0.1)",
+						"description": "%param.partialLightTheme%",
+						"scope": "resource"
+					},
+					"idf.coveredDarkTheme": {
+						"type": "string",
+						"default": "rgba(0,128,0,0.1)",
+						"description": "%param.coveredDarkTheme%",
+						"scope": "resource"
+					},
+					"idf.uncoveredLightTheme": {
+						"type": "string",
+						"default": "rgba(255,0,0,0.1)",
+						"description": "%param.uncoveredLightTheme%",
+						"scope": "resource"
+					},
+					"idf.uncoveredDarkTheme": {
+						"type": "string",
+						"default": "rgba(255,0,0,0.1)",
+						"description": "%param.uncoveredDarkTheme%",
+						"scope": "resource"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.componentManager%",
+				"properties": {
+					"idf.enableIdfComponentManager": {
+						"type": "boolean",
+						"description": "%param.enableIdfComponentManager.title%",
+						"scope": "resource",
+						"default": false
+					},
+					"esp.component-manager.url": {
+						"type": "string",
+						"description": "%esp.component-manager.url.description%",
+						"scope": "resource",
+						"default": "https://components.espressif.com"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.qemu%",
+				"properties": {
+					"idf.qemuDebugMonitor": {
+						"type": "boolean",
+						"description": "%param.qemuDebugMonitor%",
+						"scope": "resource",
+						"default": true
+					},
+					"idf.qemuExtraArgs": {
+						"type": "array",
+						"description": "%param.qemuExtraArgs%",
+						"scope": "resource",
+						"default": []
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.unitTest%",
+				"properties": {
+					"idf.unitTestFilePattern": {
+						"type": "string",
+						"description": "%param.unitTestFilePattern.title%",
+						"scope": "resource",
+						"default": "**/test/test_*.c"
+					}
+				}
+			},
+			{
+				"title": "%configuration.section.other%",
+				"properties": {
+					"idf.wssPort": {
+						"type": "number",
+						"default": 49203,
+						"description": "%idf.wssPort.description%",
+						"scope": "resource",
+						"minimum": 49152,
+						"maximum": 65535
+					},
+					"idf.sbomFilePath": {
+						"type": "string",
+						"scope": "resource",
+						"default": "espidf.spdx",
+						"description": "%param.sbomFilePath.title%"
+					},
+					"idf.imageViewerConfigs": {
+						"type": "string",
+						"description": "%param.imageViewerConfigs.title%",
+						"scope": "resource",
+						"default": ""
+					}
+				}
+			}
+		],
+		"commands": [
+			{
+				"command": "espIdf.errorHints.clearAll",
+				"title": "%command.errorHints.clearAll.title%",
+				"icon": "$(clear-all)",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.errorHints.clearBuildErrors",
+				"title": "%command.errorHints.clearBuild.title%",
+				"icon": "$(trash)",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.errorHints.clearOpenOCDErrors",
+				"title": "%command.errorHints.clearOpenOCD.title%",
+				"icon": "$(trash)",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.removeEspIdfSettings",
+				"title": "%espIdf.removeEspIdfSettings.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.openWalkthrough",
+				"title": "ESP-IDF: Open Get Started Walkthrough",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.searchError",
+				"title": "%espIdf.searchError.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.addArduinoAsComponentToCurFolder",
+				"title": "%espIdf.addArduinoAsComponentToCurFolder.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.createVsCodeFolder",
+				"title": "%espIdf.createVsCodeFolder.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.createIdfTerminal",
+				"title": "%espIdf.createIdfTerminal.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.createClassicMenuconfig",
+				"title": "%espIdf.createClassicMenuconfig.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.selectConfTarget",
+				"title": "%espIdf.selectConfTarget.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.setTarget",
+				"title": "%espIdf.setTarget.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.menuconfig.start",
+				"title": "%espIdf.menuconfig.start.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.installManager",
+				"title": "%espIdf.installManager.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.cmakeListsEditor.start",
+				"title": "%espIdf.cmakeListsEditor.start.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.selectPort",
+				"title": "%espIdf.selectPort.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.selectMonitorPort",
+				"title": "%espIdf.selectMonitorPort.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.detectSerialPort",
+				"title": "%espIdf.detectSerialPort.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.buildDevice",
+				"title": "%espIdf.buildDevice.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.buildApp",
+				"title": "%espIdf.buildApp.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.flashAppUart",
+				"title": "%espIdf.flashAppUart.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.buildBootloader",
+				"title": "%espIdf.buildBootloader.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.flashBootloaderUart",
+				"title": "%espIdf.flashBootloaderUart.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.buildPartitionTable",
+				"title": "%espIdf.buildPartitionTable.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.flashPartitionTableUart",
+				"title": "%espIdf.flashPartitionTableUart.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.flashDevice",
+				"title": "%espIdf.flashDevice.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.flashUart",
+				"title": "%espIdf.flashUart.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.flashDFU",
+				"title": "%espIdf.flashDFU.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.flashAndEncryptDevice",
+				"title": "%espIdf.flashAndEncryptDevice.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.monitorDevice",
+				"title": "%espIdf.monitorDevice.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.buildFlashMonitor",
+				"title": "%espIdf.buildFlashMonitor.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.pickAWorkspaceFolder",
+				"title": "%espIdf.pickAWorkspaceFolder.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.size",
+				"title": "%espIdf.size.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.apptrace",
+				"title": "%espIdf.apptrace.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.heaptrace",
+				"title": "%espIdf.heaptrace.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.openOCDCommand",
+				"title": "%espIdf.openOCDCommand.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.openOcdAdapterStatusBar",
+				"title": "%espIdf.openOcdAdapterStatusBar.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.partition.table.refresh",
+				"title": "%espIdf.partition.table.refresh.title%",
+				"category": "ESP-IDF",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "espIdf.flashBinaryToPartition",
+				"category": "ESP-IDF",
+				"title": "%espIdf.flashBinaryToPartition.title%"
+			},
+			{
+				"command": "espIdf.apptrace.archive.refresh",
+				"title": "%espIdf.apptrace.archive.refresh.title%",
+				"icon": "$(refresh)",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.apptrace.archive.showReport",
+				"title": "%espIdf.apptrace.archive.showReport.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.apptrace.customize",
+				"title": "%espIdf.apptrace.customize.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "esp.rainmaker.backend.connect",
+				"title": "%esp.rainmaker.backend.connect.title%",
+				"category": "ESP-IDF",
+				"icon": "$(sign-in)"
+			},
+			{
+				"command": "esp.rainmaker.backend.sync",
+				"title": "%esp.rainmaker.backend.sync.title%",
+				"category": "ESP-IDF",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "esp.rainmaker.backend.logout",
+				"title": "%esp.rainmaker.backend.logout.title%",
+				"category": "ESP-IDF",
+				"icon": "$(sign-out)"
+			},
+			{
+				"command": "esp.rainmaker.backend.add_node",
+				"title": "%esp.rainmaker.backend.add_node.title%",
+				"category": "ESP-IDF",
+				"icon": "$(add)"
+			},
+			{
+				"command": "esp.rainmaker.backend.remove_node",
+				"title": "%esp.rainmaker.backend.remove_node.title%",
+				"category": "ESP-IDF",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "esp.rainmaker.backend.update_node_param",
+				"title": "%esp.rainmaker.backend.update_node_param.title%",
+				"category": "ESP-IDF",
+				"icon": "$(edit)"
+			},
+			{
+				"command": "espIdf.openDocUrl",
+				"title": "%espIdf.openDocUrl.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.clearDocsSearchResult",
+				"title": "%espIdf.clearDocsSearchResult.title%",
+				"icon": "$(clear-all)",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.genCoverage",
+				"title": "%espIdf.genCoverage.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.removeCoverage",
+				"title": "%espIdf.removeCoverage.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.getCoverageReport",
+				"title": "%espIdf.getCoverageReport.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.launchWSServerAndMonitor",
+				"category": "ESP-IDF",
+				"title": "%espIdf.launchWSServerAndMonitor.title%",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.searchInEspIdfDocs",
+				"title": "%espIdf.searchInEspIdfDocs.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "esp.efuse.summary",
+				"title": "%esp.efuse.summary.title%",
+				"category": "ESP-IDF",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "espIdf.efuse.clearResults",
+				"title": "%espIdf.efuse.clearResults.title%",
+				"category": "ESP-IDF",
+				"icon": "$(clear-all)"
+			},
+			{
+				"command": "espIdf.getEspAdf",
+				"title": "%espIdf.getEspAdf.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "esp.webview.open.partition-table",
+				"title": "%esp.webview.open.partition-table.title%",
+				"icon": "$(output)"
+			},
+			{
+				"command": "espIdf.jtag_flash",
+				"title": "%espIdf.jtag_flash.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.selectFlashMethodAndFlash",
+				"title": "%espIdf.selectFlashMethodAndFlash.title%",
+				"category": "ESP-IDF",
+				"when": "!isWeb"
+			},
+			{
+				"command": "espIdf.fullClean",
+				"title": "%espIdf.fullClean.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.webview.nvsPartitionEditor",
+				"title": "%espIdf.webview.nvsPartitionEditor.title%"
+			},
+			{
+				"command": "espIdf.selectOpenOcdConfigFiles",
+				"title": "%espIdf.selectOpenOcdConfigFiles.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.doctorCommand",
+				"title": "%espIdf.doctorCommand.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.troubleshootPanel",
+				"title": "%espIdf.troubleshootPanel.title%"
+			},
+			{
+				"command": "espIdf.createNewComponent",
+				"title": "%espIdf.createNewComponent.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.ninja.summary",
+				"title": "%espIdf.ninja.summary.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.disposeConfserverProcess",
+				"title": "%espIdf.disposeConfserverProcess.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.newProject.start",
+				"title": "%espIdf.newProject.start.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.createNewProject",
+				"title": "%espIdf.createNewProject.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.eraseFlash",
+				"title": "%espIdf.eraseFlash.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.setGcovConfig",
+				"title": "%espIdf.setGcovConfig.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "esp.component-manager.ui.show",
+				"title": "%esp.component-manager.ui.show.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.importProject",
+				"title": "%espIdf.importProject.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.qemuCommand",
+				"title": "%espIdf.launchQemu.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.createDevContainer",
+				"title": "%espIdf.createDevContainer.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.monitorQemu",
+				"title": "%espIdf.monitorQemu.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.qemuDebug",
+				"title": "%espIdf.qemuDebug.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.customTask",
+				"title": "%espIdf.customTask.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.welcome.start",
+				"title": "%espIdf.welcome.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.projectConf",
+				"title": "%espIdf.projectConf.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.createProjectConfiguration",
+				"title": "%espIdf.createProjectConfiguration.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.selectNotificationMode",
+				"title": "%espIdf.selectNotificationMode.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.unitTest.buildFlashUnitTestApp",
+				"title": "%espIdf.unitTest.buildFlashUnitTestApp.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.unitTest.buildUnitTestApp",
+				"title": "%espIdf.unitTest.buildUnitTestApp.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.unitTest.flashUnitTestApp",
+				"title": "%espIdf.unitTest.flashUnitTestApp.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.saveDefSdkconfig",
+				"title": "%espIdf.saveDefSdkconfig.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.createSbom",
+				"title": "%espIdf.createSbom.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.selectCurrentIdfVersion",
+				"title": "%espIdf.selectCurrentIdfVersion.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.idfReconfigureTask",
+				"title": "%espIdf.idfReconfigureTask.title%"
+			},
+			{
+				"command": "espIdf.viewAsHex",
+				"title": "%espIdf.viewAsHex.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.viewVariableAsImage",
+				"title": "%espIdf.viewVariableAsImage.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.openImageViewer",
+				"title": "%espIdf.openImageViewer.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.loadImageFromFile",
+				"title": "%espIdf.loadImageFromFile.title%",
+				"category": "ESP-IDF"
+			},
+			{
+				"command": "espIdf.hexView.copyValue",
+				"title": "%espIdf.hexView.copyValue.title%",
+				"category": "ESP-IDF",
+				"icon": "$(copy)"
+			},
+			{
+				"command": "espIdf.hexView.deleteElement",
+				"title": "%espIdf.hexView.deleteElement.title%",
+				"category": "ESP-IDF",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "espIdf.setClangSettings",
+				"title": "%espIdf.setClangSettings.title%",
+				"category": "ESP-IDF"
+			}
+		],
+		"breakpoints": [
+			{
+				"language": "c"
+			},
+			{
+				"language": "cpp"
+			}
+		],
+		"debuggers": [
+			{
+				"type": "gdbtarget",
+				"label": "Eclipse GDB Target",
+				"runtime": "node",
+				"configurationAttributes": {
+					"launch": {
+						"properties": {
+							"gdb": {
+								"type": "string",
+								"description": "Path to gdb",
+								"default": "${command:espIdf.getToolchainGdb}"
+							},
+							"cwd": {
+								"type": "string",
+								"description": "Working directory (cwd) to use when launching gdb. Defaults to the directory of the 'program'"
+							},
+							"buildFlashMonitor": {
+								"type": "boolean",
+								"description": "Build, Flash and Monitor the device before debugging",
+								"default": false
+							},
+							"runOpenOCD": {
+								"type": "boolean",
+								"description": "Run OpenOCD Server",
+								"default": true
+							},
+							"environment": {
+								"additionalProperties": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"default": {},
+								"description": "Environment variables to use when launching gdb, defined as a key-value pairs. Use null value to remove variable. For example:\n\"environment\": {\n  \"VARNAME\": \"value\",\n  \"PATH\": \"/new/item:${env:PATH}\",\n  \"REMOVEME\": null\n}",
+								"type": "object"
+							},
+							"program": {
+								"type": "string",
+								"description": "Path to the program to be launched",
+								"default": "${workspaceFolder}/build/${command:espIdf.getProjectName}.elf"
+							},
+							"gdbAsync": {
+								"type": "boolean",
+								"description": "Use mi-async mode for communication with GDB. (defaults to true, always true when gdbNonStop is true)",
+								"default": true
+							},
+							"gdbNonStop": {
+								"type": "boolean",
+								"description": "Use non-stop mode for controlling multiple threads. (defaults to false)",
+								"default": false
+							},
+							"verbose": {
+								"type": "boolean",
+								"description": "Produce verbose log output",
+								"default": false
+							},
+							"verifyAppBinBeforeDebug": {
+								"type": "boolean",
+								"description": "%esp_idf.verifyAppBinBeforeDebug.description%",
+								"default": false
+							},
+							"logFile": {
+								"type": "string",
+								"description": "Absolute path to the file to log interaction with gdb"
+							},
+							"openGdbConsole": {
+								"type": "boolean",
+								"description": "(UNIX-only) Open a GDB console in your IDE while debugging"
+							},
+							"initCommands": {
+								"type": "array",
+								"description": "List of GDB commands sent after attaching to target before loading image on target.",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"initialBreakpoint": {
+								"type": "string",
+								"description": "Initial hardware breakpoint being set as 'thb <value>'. For a value 'app_main' result in 'thb app_main' in initCommands. If user set an empty string '' no initial breakpoint will be set and if let undefined it will use the default 'thb app_main'. Ignored if user defines initCommands argument.",
+								"default": "app_main"
+							},
+							"preRunCommands": {
+								"type": "array",
+								"description": "List of GDB commands sent after loading image on target before resuming target.",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"imageAndSymbols": {
+								"type": "object",
+								"default": {},
+								"properties": {
+									"symbolFileName": {
+										"type": "string",
+										"description": "If specified, a symbol file to load at the given (optional) offset",
+										"default": ""
+									},
+									"symbolOffset": {
+										"type": "string",
+										"description": "If symbolFileName is specified, the offset used to load",
+										"default": ""
+									},
+									"imageFileName": {
+										"type": "string",
+										"description": "If specified, an image file to load at the given (optional) offset",
+										"default": ""
+									},
+									"imageOffset": {
+										"type": "string",
+										"description": "If imageFileName is specified, the offset used to load",
+										"default": ""
+									}
+								}
+							},
+							"target": {
+								"type": "object",
+								"default": {
+									"connectCommands": [
+										"set remotetimeout 20",
+										"-target-select extended-remote localhost:3333"
+									]
+								},
+								"properties": {
+									"type": {
+										"type": "string",
+										"description": "The kind of target debugging to do. This is passed to -target-select (defaults to remote)",
+										"default": "remote"
+									},
+									"parameters": {
+										"type": "array",
+										"description": "Target parameters for the type of target. Normally something like localhost:12345. (defaults to `${host}:${port}`)",
+										"items": {
+											"type": "string"
+										},
+										"default": []
+									},
+									"connectCommands": {
+										"type": "array",
+										"description": "Commands to execute for target connection. Normally something like [`-target-select extended-remote localhost:3333`]",
+										"items": {
+											"type": "string"
+										},
+										"default": [
+											"set remotetimeout 20",
+											"-target-select extended-remote localhost:3333"
+										]
+									},
+									"host": {
+										"type": "string",
+										"description": "Target host to connect to (defaults to 'localhost', ignored if parameters is set)",
+										"default": "localhost"
+									},
+									"port": {
+										"type": "string",
+										"description": "Target port to connect to (defaults to value captured by serverPortRegExp, ignored if parameters is set)",
+										"default": "2331"
+									},
+									"cwd": {
+										"type": "string",
+										"description": "Specifies the working directory of server (defaults to the working directory of gdb)",
+										"default": ""
+									},
+									"environment": {
+										"additionalProperties": {
+											"type": [
+												"string",
+												"null"
+											]
+										},
+										"default": {},
+										"description": "Environment variables to use when launching server (defaults to the environment used to launch gdb), defined as a key-value pairs. Use null value to remove variable. For example:\n\"environment\": {\n  \"VARNAME\": \"value\",\n  \"PATH\": \"/new/item:${env:PATH}\",\n  \"REMOVEME\": null\n}",
+										"type": "object"
+									},
+									"server": {
+										"type": "string",
+										"description": "The executable for the target server to launch (e.g. gdbserver or JLinkGDBServerCLExe) (defaults to gdbserver)",
+										"default": "gdbserver"
+									},
+									"serverParameters": {
+										"type": "array",
+										"description": "Command line arguments passed to server (defaults to --once :0 ${args.program}).",
+										"items": {
+											"type": "string"
+										},
+										"default": []
+									},
+									"serverPortRegExp": {
+										"type": "string",
+										"description": "Regular expression to extract port from by examinging stdout/err of server. Once server is launched, port will be set to this if port is not set. Defaults to matching a string like 'Listening on port 41551' which is what gdbserver provides. Ignored if port or parameters is set",
+										"default": ""
+									},
+									"serverStartupDelay": {
+										"type": "number",
+										"description": "Delay after startup before continuing launch, in milliseconds. If serverPortRegExp is provided, it is the delay after that regexp is seen.",
+										"default": "0"
+									},
+									"automaticallyKillServer": {
+										"type": "boolean",
+										"description": "Automatically kill the launched server when client issues a disconnect (default: true)"
+									},
+									"uart": {
+										"type": "object",
+										"description": "Settings related to displaying UART output in the debug console",
+										"properties": {
+											"serialPort": {
+												"type": "string",
+												"description": "Path to the serial port connected to the UART on the board."
+											},
+											"socketPort": {
+												"type": "string",
+												"description": "Target TCP port on the host machine to attach socket to print UART output (defaults to 3456)",
+												"default": "3456"
+											},
+											"baudRate": {
+												"type": "number",
+												"description": "Baud Rate (in bits/s) of the serial port to be opened (defaults to 115200).",
+												"default": 115200
+											},
+											"characterSize": {
+												"type": "number",
+												"enum": [
+													5,
+													6,
+													7,
+													8
+												],
+												"description": "The number of bits in each character of data sent across the serial line (defaults to 8).",
+												"default": 8
+											},
+											"parity": {
+												"type": "string",
+												"enum": [
+													"none",
+													"odd",
+													"even",
+													"mark",
+													"space"
+												],
+												"description": "The type of parity check enabled with the transmitted data (defaults to \"none\" - no parity bit sent)",
+												"default": "none"
+											},
+											"stopBits": {
+												"type": "number",
+												"enum": [
+													1,
+													1.5,
+													2
+												],
+												"description": "The number of stop bits sent to allow the receiver to detect the end of characters and resynchronize with the character stream (defaults to 1).",
+												"default": 1
+											},
+											"handshakingMethod": {
+												"type": "string",
+												"enum": [
+													"none",
+													"XON/XOFF",
+													"RTS/CTS"
+												],
+												"description": "The handshaking method used for flow control across the serial line (defaults to \"none\" - no handshaking)",
+												"default": "none"
+											},
+											"eolCharacter": {
+												"type": "string",
+												"enum": [
+													"LF",
+													"CRLF"
+												],
+												"description": "The EOL character used to parse the UART output line-by-line (defaults to \"LF\").",
+												"default": "LF"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"attach": {
+						"properties": {
+							"gdb": {
+								"type": "string",
+								"description": "Path to gdb",
+								"default": "${command:espIdf.getToolchainGdb}"
+							},
+							"cwd": {
+								"type": "string",
+								"description": "Working directory (cwd) to use when launching gdb. Defaults to the directory of the 'program'"
+							},
+							"buildFlashMonitor": {
+								"type": "boolean",
+								"description": "Build, Flash and Monitor the device before debugging",
+								"default": false
+							},
+							"runOpenOCD": {
+								"type": "boolean",
+								"description": "Run OpenOCD Server",
+								"default": true
+							},
+							"environment": {
+								"additionalProperties": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"default": {},
+								"description": "Environment variables to use when launching gdb, defined as a key-value pairs. Use null value to remove variable. For example:\n\"environment\": {\n  \"VARNAME\": \"value\",\n  \"PATH\": \"/new/item:${env:PATH}\",\n  \"REMOVEME\": null\n}",
+								"type": "object"
+							},
+							"program": {
+								"type": "string",
+								"description": "Path to the program to be debugged",
+								"default": "${workspaceFolder}/build/${command:espIdf.getProjectName}.elf"
+							},
+							"gdbAsync": {
+								"type": "boolean",
+								"description": "Use mi-async mode for communication with GDB. (defaults to true, always true when gdbNonStop is true)",
+								"default": true
+							},
+							"gdbNonStop": {
+								"type": "boolean",
+								"description": "Use non-stop mode for controlling multiple threads. (defaults to false)",
+								"default": false
+							},
+							"verbose": {
+								"type": "boolean",
+								"description": "Produce verbose log output",
+								"default": false
+							},
+							"verifyAppBinBeforeDebug": {
+								"type": "boolean",
+								"description": "%esp_idf.verifyAppBinBeforeDebug.description%",
+								"default": false
+							},
+							"logFile": {
+								"type": "string",
+								"description": "Absolute path to the file to log interaction with gdb"
+							},
+							"openGdbConsole": {
+								"type": "boolean",
+								"description": "(UNIX-only) Open a GDB console in your IDE while debugging"
+							},
+							"initCommands": {
+								"type": "array",
+								"description": "List of GDB commands sent after attaching to target before loading image on target.",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"initialBreakpoint": {
+								"type": "string",
+								"description": "Initial hardware breakpoint being set as 'thb <value>'. For a value 'app_main' result in 'thb app_main' in initCommands. If user set an empty string '' no initial breakpoint will be set and if let undefined it will use the default 'thb app_main'. Ignored if user defines initCommands argument.",
+								"default": "app_main"
+							},
+							"preRunCommands": {
+								"type": "array",
+								"description": "List of GDB commands sent after loading image on target before resuming target.",
+								"items": {
+									"type": "string"
+								},
+								"default": []
+							},
+							"imageAndSymbols": {
+								"type": "object",
+								"default": {},
+								"properties": {
+									"symbolFileName": {
+										"type": "string",
+										"description": "If specified, a symbol file to load at the given (optional) offset",
+										"default": ""
+									},
+									"symbolOffset": {
+										"type": "string",
+										"description": "If symbolFileName is specified, the offset used to load",
+										"default": ""
+									},
+									"imageFileName": {
+										"type": "string",
+										"description": "If specified, an image file to load at the given (optional) offset",
+										"default": ""
+									},
+									"imageOffset": {
+										"type": "string",
+										"description": "If imageFileName is specified, the offset used to load",
+										"default": ""
+									}
+								}
+							},
+							"target": {
+								"type": "object",
+								"default": {
+									"connectCommands": [
+										"set remotetimeout 20",
+										"-target-select extended-remote localhost:3333"
+									]
+								},
+								"properties": {
+									"type": {
+										"type": "string",
+										"description": "The kind of target debugging to do. This is passed to -target-select (defaults to remote)",
+										"default": "remote"
+									},
+									"parameters": {
+										"type": "array",
+										"description": "Target parameters for the type of target. Normally something like localhost:12345. (defaults to `${host}:${port}`)",
+										"items": {
+											"type": "string"
+										},
+										"default": []
+									},
+									"host": {
+										"type": "string",
+										"description": "Target host to connect to (defaults to 'localhost', ignored if parameters is set)",
+										"default": "localhost"
+									},
+									"port": {
+										"type": "string",
+										"description": "Target port to connect to (defaults to value captured by serverPortRegExp, ignored if parameters is set)",
+										"default": "2331"
+									},
+									"uart": {
+										"type": "object",
+										"description": "Settings related to displaying UART output in the debug console",
+										"properties": {
+											"serialPort": {
+												"type": "string",
+												"description": "Path to the serial port connected to the UART on the board."
+											},
+											"socketPort": {
+												"type": "string",
+												"description": "Target TCP port on the host machine to attach socket to print UART output (defaults to 3456)",
+												"default": "3456"
+											},
+											"baudRate": {
+												"type": "number",
+												"description": "Baud Rate (in bits/s) of the serial port to be opened (defaults to 115200).",
+												"default": 115200
+											},
+											"characterSize": {
+												"type": "number",
+												"enum": [
+													5,
+													6,
+													7,
+													8
+												],
+												"description": "The number of bits in each character of data sent across the serial line (defaults to 8).",
+												"default": 8
+											},
+											"parity": {
+												"type": "string",
+												"enum": [
+													"none",
+													"odd",
+													"even",
+													"mark",
+													"space"
+												],
+												"description": "The type of parity check enabled with the transmitted data (defaults to \"none\" - no parity bit sent)",
+												"default": "none"
+											},
+											"stopBits": {
+												"type": "number",
+												"enum": [
+													1,
+													1.5,
+													2
+												],
+												"description": "The number of stop bits sent to allow the receiver to detect the end of characters and resynchronize with the character stream (defaults to 1).",
+												"default": 1
+											},
+											"handshakingMethod": {
+												"type": "string",
+												"enum": [
+													"none",
+													"XON/XOFF",
+													"RTS/CTS"
+												],
+												"description": "The handshaking method used for flow control across the serial line (defaults to \"none\" - no handshaking)",
+												"default": "none"
+											},
+											"eolCharacter": {
+												"type": "string",
+												"enum": [
+													"LF",
+													"CRLF"
+												],
+												"description": "The EOL character used to parse the UART output line-by-line (defaults to \"LF\").",
+												"default": "LF"
+											}
+										}
+									},
+									"connectCommands": {
+										"type": "array",
+										"description": "Commands to execute for target connection. Normally something like [`-target-select extended-remote localhost:3333`]",
+										"items": {
+											"type": "string"
+										},
+										"default": [
+											"set remotetimeout 20",
+											"-target-select extended-remote localhost:3333"
+										]
+									}
+								}
+							}
+						}
+					}
+				},
+				"initialConfigurations": [
+					{
+						"type": "gdbtarget",
+						"request": "attach",
+						"name": "Eclipse CDT GDB Adapter"
+					}
+				],
+				"configurationSnippets": [
+					{
+						"label": "Eclipse CDT GDB Adapter",
+						"description": "A espidf configuration for remote debugging using GDB.",
+						"body": {
+							"type": "gdbtarget",
+							"request": "attach",
+							"name": "Eclipse CDT GDB Adapter"
+						}
+					}
+				]
+			}
+		],
+		"languages": [
+			{
+				"id": "kconfig",
+				"aliases": [
+					"Kconfig",
+					"kconfig"
+				],
+				"extensions": [
+					"Kconfig.projbuild",
+					"Kconfig.in",
+					"Kconfig"
+				],
+				"configuration": "./kconfig-language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "kconfig",
+				"scopeName": "source.kconfig",
+				"path": "./syntaxes/kconfig.tmLanguage.json"
+			}
+		],
+		"snippets": [
+			{
+				"language": "kconfig",
+				"path": "./snippets/kconfig.code-snippets"
+			}
+		],
+		"taskDefinitions": [
+			{
+				"type": "esp-idf",
+				"properties": {
+					"command": {
+						"type": "string",
+						"description": "Command to Be Executed"
+					}
+				},
+				"required": [
+					"type"
+				]
+			}
+		],
+		"languageModelTools": [
+			{
+				"name": "espIdfCommands",
+				"displayName": "ESP-IDF Commands",
+				"modelDescription": "Execute ESP-IDF extension commands for building, flashing, monitoring, and managing ESP32 projects. ALWAYS use this tool for ESP-IDF development tasks instead of shell commands or terminal tasks. When users ask to 'build the project', 'flash the device', 'monitor output', 'clean project', 'configure project', 'analyze size', 'create new project', 'set target to esp32s3', or any ESP-IDF related task, use this tool. Supports: build, flash, monitor, menuconfig, size analysis, project creation, component management, target setting, and more. For setTarget command, you can specify a target parameter (esp32, esp32s2, esp32s3, esp32c3, esp32c6, esp32h2, esp32p4, esp32c2, esp32c5, esp32c61, esp32h21, esp32h4, linux) to set it directly. For build, flash, and buildFlashMonitor commands, you can optionally specify partitionToUse (app, bootloader, partition-table) and flashType (UART, JTAG, DFU) parameters. This tool provides detailed feedback about command execution status, automatically focuses the terminal for task commands, and shows the ESP-IDF output channel for other operations. This is the ONLY way to interact with ESP-IDF projects in VS Code - do not use shell commands for ESP-IDF tasks.",
+				"canBeReferencedInPrompt": true,
+				"toolReferenceName": "espIdfCommands",
+				"tags": [
+					"esp-idf",
+					"idf",
+					"idf.py",
+					"build",
+					"flash",
+					"monitor",
+					"buildFlashMonitor",
+					"fullClean",
+					"menuconfig",
+					"size",
+					"eraseFlash",
+					"selectPort",
+					"setTarget",
+					"doctor",
+					"newProject",
+					"partitionTable",
+					"componentManager",
+					"apptrace",
+					"heaptrace",
+					"project",
+					"development",
+					"build the project",
+					"flash the device",
+					"monitor the output",
+					"clean the project",
+					"configure the project",
+					"analyze size",
+					"erase flash",
+					"select port",
+					"set target",
+					"set target to esp32",
+					"set target to esp32s2",
+					"set target to esp32s3",
+					"set target to esp32c3",
+					"set target to esp32c6",
+					"set target to esp32h2",
+					"set target to esp32p4",
+					"set target to esp32c2",
+					"set target to esp32c5",
+					"set target to esp32c61",
+					"set target to esp32h21",
+					"set target to esp32h4",
+					"set target to linux",
+					"run doctor",
+					"create new project",
+					"edit partition table",
+					"manage components",
+					"start app trace",
+					"start heap trace",
+					"build app",
+					"build bootloader",
+					"build partition table",
+					"flash app",
+					"flash bootloader",
+					"flash partition table",
+					"build and flash app",
+					"build and flash bootloader",
+					"build and flash partition table",
+					"flash with UART",
+					"flash with JTAG",
+					"flash with DFU",
+					"flash device with UART",
+					"flash device with JTAG",
+					"flash device with DFU",
+					"build and flash with UART",
+					"build and flash with JTAG",
+					"build and flash with DFU"
+				],
+				"icon": "$(run-view-icon)",
+				"inputSchema": {
+					"type": "object",
+					"properties": {
+						"command": {
+							"type": "string",
+							"description": "The ESP-IDF command to execute. Use this for ESP-IDF project operations like building, flashing, monitoring, and project management.",
+							"enum": [
+								"build",
+								"flash",
+								"monitor",
+								"buildFlashMonitor",
+								"fullClean",
+								"menuconfig",
+								"size",
+								"eraseFlash",
+								"selectPort",
+								"setTarget",
+								"doctor",
+								"newProject",
+								"partitionTable",
+								"componentManager",
+								"apptrace",
+								"heaptrace"
+							],
+							"default": "build"
+						},
+						"target": {
+							"type": "string",
+							"description": "The ESP-IDF target to set when using the setTarget command. Common targets include: esp32, esp32s2, esp32s3, esp32c3, esp32c6, esp32h2, esp32p4, esp32c2, esp32c5, esp32c61, esp32h21, esp32h4, linux. This parameter is only used when command is 'setTarget'.",
+							"enum": [
+								"esp32",
+								"esp32s2",
+								"esp32c3",
+								"esp32s3",
+								"esp32c2",
+								"esp32c6",
+								"esp32h2",
+								"esp32p4",
+								"linux",
+								"esp32c5",
+								"esp32c61",
+								"esp32h21",
+								"esp32h4"
+							]
+						},
+						"partitionToUse": {
+							"oneOf": [
+								{
+									"type": "string",
+									"description": "Specifies which partition to build or flash. This parameter is optional and only used for build, flash, and buildFlashMonitor commands.",
+									"enum": [
+										"app",
+										"bootloader",
+										"partition-table"
+									]
+								},
+								{
+									"type": "null",
+									"description": "Use undefined to explicitly use the default configuration"
+								}
+							],
+							"description": "Specifies which partition to build or flash. Use undefined to explicitly use the default configuration. This parameter is optional and only used for build, flash, and buildFlashMonitor commands."
+						},
+						"flashType": {
+							"type": "string",
+							"description": "Specifies the flash method to use. This parameter is optional and only used for flash and buildFlashMonitor commands.",
+							"enum": [
+								"UART",
+								"JTAG",
+								"DFU"
+							]
+						}
+					},
+					"required": [
+						"command"
+					]
+				}
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "webpack --mode production",
+		"lint": "prettier --check **/*.*",
+		"debugPreTask": "webpack --mode development",
+		"compile": "rimraf out && tsc -p ./",
+		"watch": "webpack --watch --mode development",
+		"test": "yarn compile && node ./out/test/runTest.js --VERBOSE 2>&1",
+		"package": "yarn clean && vsce package --yarn -o esp-idf-extension.vsix",
+		"release": "vsce publish --yarn -p ${VS_MARKETPLACE_TOKEN} --packagePath esp-idf-extension.vsix",
+		"open-vsx-release": "ovsx -p ${OPENVSX_MARKETPLACE_TOKEN} publish --yarn esp-idf-extension.vsix",
+		"open-vsx-prerelease": "ovsx -p ${OPENVSX_MARKETPLACE_TOKEN} publish --yarn --pre-release esp-idf-extension.vsix",
+		"clean": "node clean.js",
+		"genLocalizationBundle": "npx @vscode/l10n-dev export --outDir ./l10n ./src",
+		"webpack": "webpack --mode production",
+		"ui-test": "yarn compile && extest setup-and-run -y -i -u -l DEBUG -o testFiles/testWorkspace/.vscode/settings.json out/ui-test/project-build-test.js out/ui-test/project-menuconfig-test.js out/ui-test/project-test.js",
+		"ci-test": "yarn compile && extest setup-and-run out/ui-test/project-build-test.js out/ui-test/project-menuconfig-test.js out/ui-test/project-test.js -u -s test-resources -c min -o testFiles/testWorkspace/.vscode/settings.json -l DEBUG -m ./src/ui-test/.mocharc-ci.js",
+		"ci-test-hardware": "IDF_UI_TEST_SERIAL_PORT=/dev/ttyUSB1 yarn compile && extest setup-and-run out/ui-test/project-hardware-e2e-test.js -u -s test-resources -c min -o testFiles/testWorkspace/.vscode/settings.json -l DEBUG -m ./src/ui-test/.mocharc-ci-hardware.js"
+	},
+	"devDependencies": {
+		"@babel/types": "^7.23.0",
+		"@creativebulma/bulma-tooltip": "^1.2.0",
+		"@iconify-prerendered/vue-codicon": "^0.23.1693459661",
+		"@types/chai": "^4.2.21",
+		"@types/d3-scale": "^4.0.5",
+		"@types/follow-redirects": "^1.8.0",
+		"@types/fs-extra": "^8.0.1",
+		"@types/glob": "^7.1.1",
+		"@types/jsonic": "^0.3.0",
+		"@types/marked": "^4.0.2",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "^20.7.0",
+		"@types/plotly.js-dist-min": "^2.3.2",
+		"@types/sanitize-html": "^2.6.2",
+		"@types/tar-fs": "^2.0.1",
+		"@types/tmp": "0.0.33",
+		"@types/vscode": "^1.100.3",
+		"@types/ws": "^7.2.5",
+		"@types/xml2js": "^0.4.11",
+		"@types/yauzl": "^2.9.1",
+		"@vscode/debugadapter": "^1.65.0",
+		"@vscode/debugadapter-testsupport": "^1.51.0",
+		"@vscode/debugprotocol": "^1.65.0",
+		"@vscode/extension-telemetry": "0.4.8",
+		"@vscode/l10n-dev": "^0.0.35",
+		"@vscode/test-electron": "^2.1.2",
+		"@vscode/vsce": "^3.6.0",
+		"@vue/compiler-sfc": "^3.3.4",
+		"bulma": "^1.0.4",
+		"chai": "^4.3.4",
+		"css-loader": "^6.8.1",
+		"d3-scale": "^4.0.2",
+		"file-loader": "^6.2.0",
+		"filemanager-webpack-plugin": "^8.0.0",
+		"glob": "^7.1.4",
+		"husky": "^6.0.0",
+		"js-yaml": "^4.3.1",
+		"jsonic": "^1.0.1",
+		"mocha": "^11.7.5",
+		"ovsx": "^0.10.2",
+		"prettier": "2.0.2",
+		"pretty-quick": "^2.0.1",
+		"process": "^0.11.10",
+		"reflect-metadata": "^0.1.13",
+		"rimraf": "^5.0.7",
+		"sass": "^1.69.0",
+		"sass-loader": "^16.0.5",
+		"string-replace-loader": "^3.1.0",
+		"style-loader": "^3.3.1",
+		"ts-loader": "^9.5.2",
+		"typescript": "^5.2.2",
+		"vite": "^6.4.3",
+		"vscode-extension-tester": "^8.17.0",
+		"vue-hot-reload-api": "^2.3.2",
+		"vue-loader": "^17.4.2",
+		"vue-router": "^4.2.4",
+		"vue-style-loader": "^4.1.3",
+		"webpack": "5",
+		"webpack-cli": "^4.9.2"
+	},
+	"dependencies": {
+		"@types/js-yaml": "^4.0.5",
+		"@vscode/codicons": "^0.0.36",
+		"@vscode/l10n": "^0.0.18",
+		"ansi-to-html": "^0.6.11",
+		"assert": "^2.1.0",
+		"axios": "^1.18.0",
+		"bignumber.js": "^9.0.1",
+		"del": "^4.1.1",
+		"es6-promisify": "^6.0.0",
+		"fs-extra": "^8.1.0",
+		"interactjs": "^1.9.18",
+		"marked": "^4.0.12",
+		"maska": "^2.1.10",
+		"os-browserify": "^0.3.0",
+		"path-browserify": "^1.0.1",
+		"pinia": "^2.1.6",
+		"plotly.js-dist": "^1.54.1",
+		"plotly.js-dist-min": "^2.26.1",
+		"postcss": "^8.5.23",
+		"sanitize-html": "^2.17.5",
+		"serialport": "^13.0.0",
+		"stream-browserify": "^3.0.0",
+		"tar-fs": "^3.1.1",
+		"tree-kill": "^1.2.2",
+		"utf8": "^3.0.0",
+		"vscode-languageclient": "^5.2.1",
+		"vscode-languageserver": "^5.2.1",
+		"vue": "^3.3.4",
+		"winston": "^2.3.1",
+		"ws": "^7.5.11",
+		"xml2js": "^0.5.0",
+		"yauzl": "^3.2.1"
+	},
+	"alias": {
+		"vue": "./node_modules/vue/dist/vue.esm.js"
+	},
+	"azure": {
+		"insight": {
+			"key": "0cc48b26-38e9-453d-81fe-15849ac04c36"
+		}
+	},
+	"__metadata": {
+		"installedTimestamp": 1786728695960,
+		"targetPlatform": "undefined",
+		"size": 35598640
+	}
+}
