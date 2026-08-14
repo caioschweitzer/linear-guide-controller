@@ -1,5 +1,6 @@
 #include "modbus_slave.h"
 #include "shared_data.h"
+#include "gpio_safety.h"
 #include <string.h>
 #include "esp_log.h"
 #include "driver/uart.h"
@@ -10,7 +11,7 @@
 #define MB_DEV_SPEED 115200
 
 // Internal buffers mapped to Modbus stack
-static holding_reg_params_t s_holding_reg = {0, 0};
+static holding_reg_params_t s_holding_reg = {0, 0, 0};
 static input_reg_params_t s_input_reg = {0, 0, 0, 0, 0};
 
 static void* s_mbc_handle = NULL;
@@ -80,10 +81,24 @@ static void modbus_slave_task(void *pvParameters) {
     (void)pvParameters;
 
     while (1) {
-        // Poll event or update shared data periodically
         if (s_mbc_handle) {
             mb_event_group_t event = mbc_slave_check_event(s_mbc_handle, MB_EVENT_HOLDING_REG_WR | MB_EVENT_INPUT_REG_RD);
             (void)event;
+        }
+
+        // Process Command Register if set
+        uint16_t cmd = s_holding_reg.command;
+        if (cmd != CMD_NONE) {
+            s_holding_reg.command = CMD_NONE; // Reset command register after reading
+            if (cmd == CMD_START) {
+                shared_data_request_state_change(MACHINE_STATE_MOVING);
+            } else if (cmd == CMD_STOP) {
+                shared_data_request_state_change(MACHINE_STATE_IDLE);
+            } else if (cmd == CMD_RESET) {
+                shared_data_request_state_change(MACHINE_STATE_IDLE);
+            } else if (cmd == CMD_SIMULATE_EMERGENCY) {
+                gpio_safety_trigger_emergency_software();
+            }
         }
 
         if (shared_data_lock(pdMS_TO_TICKS(10))) {
@@ -93,7 +108,7 @@ static void modbus_slave_task(void *pvParameters) {
             // Write current position, velocity, state to Modbus input registers
             float_to_registers(g_system_data.current_position, &s_input_reg.pos_hi, &s_input_reg.pos_lo);
             float_to_registers(g_system_data.current_velocity, &s_input_reg.vel_hi, &s_input_reg.vel_lo);
-            s_input_reg.state = g_system_data.machine_state;
+            s_input_reg.state = (uint16_t)shared_data_get_state();
 
             shared_data_unlock();
         }
