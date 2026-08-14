@@ -1,9 +1,10 @@
 {
   "idf.currentSetup": "/home/caiu/.espressif/v6.0/esp-idf",
+  "idf.buildPath": "${workspaceFolder}/build",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
-  "idf.port": "detect",
+  "idf.port": "/dev/ttyACM0",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
@@ -12,5 +13,6 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=/home/caiu/workspace/controlador_guia_linear/build"
-  ]
+  ],
+  "idf.flashType": "UART"
 }
