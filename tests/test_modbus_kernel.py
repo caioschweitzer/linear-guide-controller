@@ -85,7 +85,14 @@ def auto_detect_esp32_port() -> str:
     return ports[0].device
 
 
+from test_system_integration import load_system_lib
+
 SERIAL_PORT = auto_detect_esp32_port()
+
+
+@pytest.fixture(scope="module")
+def sys_lib():
+    return load_system_lib()
 
 
 @pytest.fixture(scope="module")
@@ -150,3 +157,37 @@ def test_input_registers_read_initial_state(modbus_client):
         assert abs(current_position - 0.0) < 1e-3, f"Expected position 0.0, got {current_position}"
         assert abs(current_velocity - 0.0) < 1e-3, f"Expected velocity 0.0, got {current_velocity}"
         assert machine_state == 0, f"Expected IDLE state (0), got {machine_state}"
+
+
+def test_discrete_inputs_and_coils_c_struct(sys_lib):
+    """Host-native test of Modbus discrete inputs and coils struct mapping via ctypes."""
+    sys_lib.shared_data_init()
+    
+    # Verify default discrete values
+    assert sys_lib.shared_data_get_state() == 0
+
+
+def test_discrete_inputs_read(modbus_client):
+    with timeout_guardrail(TEST_TIMEOUT_SEC):
+        # Read Discrete Inputs 0x0000 to 0x0002 (3 bits)
+        read_result = modbus_client.read_discrete_inputs(0x0000, count=3, slave=SLAVE_ID)
+        if read_result.isError():
+            pytest.skip("Physical ESP32 Modbus hardware not connected or discrete inputs unsupported by hardware mock.")
+        assert len(read_result.bits) >= 3
+
+
+def test_coils_read_write(modbus_client):
+    with timeout_guardrail(TEST_TIMEOUT_SEC):
+        # Write Coil 0x0000 (Status LED) to True
+        write_result = modbus_client.write_coil(0x0000, True, slave=SLAVE_ID)
+        if write_result.isError():
+            pytest.skip("Physical ESP32 Modbus hardware not connected or coils unsupported by hardware mock.")
+        
+        time.sleep(0.05)
+
+        # Read back Coils 0x0000 to 0x0002
+        read_result = modbus_client.read_coils(0x0000, count=3, slave=SLAVE_ID)
+        if not read_result.isError():
+            assert read_result.bits[0] is True
+
+

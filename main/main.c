@@ -60,6 +60,10 @@ static void control_loop_task(void *pvParameters) {
             // Publish telemetry to shared structure for Core 0 (IHM & Modbus)
             g_system_data.current_position = current_pos_mm;
             g_system_data.current_velocity = current_vel_mm_s;
+            g_system_data.button_estop = (gpio_get_level(GPIO_EMERGENCY_PIN) != 0);
+            g_system_data.button_start = (gpio_get_level(GPIO_START_PIN) != 0);
+            g_system_data.safety_enable = (gpio_get_level(GPIO_SAFETY_ENABLE_PIN) != 0);
+            g_system_data.led_status = (g_ihm.led_state != 0);
             shared_data_unlock();
         }
 

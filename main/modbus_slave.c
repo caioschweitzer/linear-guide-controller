@@ -14,8 +14,10 @@
 #endif
 
 // Internal buffers mapped to Modbus stack
-static holding_reg_params_t s_holding_reg = {0, 0, 0};
-static input_reg_params_t s_input_reg = {0, 0, 0, 0, 0};
+holding_reg_params_t g_modbus_holding_reg = {0, 0, 0};
+input_reg_params_t g_modbus_input_reg = {0, 0, 0, 0, 0};
+discrete_reg_params_t g_modbus_discrete_reg = {0};
+coil_reg_params_t g_modbus_coil_reg = {0};
 
 static void* s_mbc_handle = NULL;
 
@@ -60,8 +62,8 @@ esp_err_t modbus_slave_init(void) {
     mb_register_area_descriptor_t reg_area_holding = {
         .type = MB_PARAM_HOLDING,
         .start_offset = HOLDING_REG_START_ADDR,
-        .address = (void*)&s_holding_reg,
-        .size = sizeof(s_holding_reg)
+        .address = (void*)&g_modbus_holding_reg,
+        .size = sizeof(g_modbus_holding_reg)
     };
     err = mbc_slave_set_descriptor(s_mbc_handle, reg_area_holding);
     if (err != ESP_OK) return err;
@@ -70,13 +72,33 @@ esp_err_t modbus_slave_init(void) {
     mb_register_area_descriptor_t reg_area_input = {
         .type = MB_PARAM_INPUT,
         .start_offset = INPUT_REG_START_ADDR,
-        .address = (void*)&s_input_reg,
-        .size = sizeof(s_input_reg)
+        .address = (void*)&g_modbus_input_reg,
+        .size = sizeof(g_modbus_input_reg)
     };
     err = mbc_slave_set_descriptor(s_mbc_handle, reg_area_input);
     if (err != ESP_OK) return err;
 
-    // 5. Start Modbus slave
+    // 5. Register discrete input area
+    mb_register_area_descriptor_t reg_area_discrete = {
+        .type = MB_PARAM_DISCRETE,
+        .start_offset = DISCRETE_REG_START_ADDR,
+        .address = (void*)&g_modbus_discrete_reg,
+        .size = sizeof(g_modbus_discrete_reg)
+    };
+    err = mbc_slave_set_descriptor(s_mbc_handle, reg_area_discrete);
+    if (err != ESP_OK) return err;
+
+    // 6. Register coil area
+    mb_register_area_descriptor_t reg_area_coil = {
+        .type = MB_PARAM_COIL,
+        .start_offset = COIL_REG_START_ADDR,
+        .address = (void*)&g_modbus_coil_reg,
+        .size = sizeof(g_modbus_coil_reg)
+    };
+    err = mbc_slave_set_descriptor(s_mbc_handle, reg_area_coil);
+    if (err != ESP_OK) return err;
+
+    // 7. Start Modbus slave
     err = mbc_slave_start(s_mbc_handle);
     return err;
 #else
@@ -90,14 +112,14 @@ static void modbus_slave_task(void *pvParameters) {
 
     while (1) {
         if (s_mbc_handle) {
-            mb_event_group_t event = mbc_slave_check_event(s_mbc_handle, MB_EVENT_HOLDING_REG_WR | MB_EVENT_INPUT_REG_RD);
+            mb_event_group_t event = mbc_slave_check_event(s_mbc_handle, MB_EVENT_HOLDING_REG_WR | MB_EVENT_INPUT_REG_RD | MB_EVENT_COILS_WR);
             (void)event;
         }
 
         // Process Command Register if set
-        uint16_t cmd = s_holding_reg.command;
+        uint16_t cmd = g_modbus_holding_reg.command;
         if (cmd != CMD_NONE) {
-            s_holding_reg.command = CMD_NONE; // Reset command register after reading
+            g_modbus_holding_reg.command = CMD_NONE; // Reset command register after reading
             if (cmd == CMD_START) {
                 shared_data_request_state_change(MACHINE_STATE_MOVING);
             } else if (cmd == CMD_STOP) {
@@ -109,14 +131,38 @@ static void modbus_slave_task(void *pvParameters) {
             }
         }
 
+        // Process Coil Triggers (Bit 1: Remote Emergency, Bit 2: Remote Start)
+        if (g_modbus_coil_reg.coils & (1 << 1)) {
+            g_modbus_coil_reg.coils &= ~(1 << 1); // Clear remote emergency trigger coil
+            gpio_safety_trigger_emergency_software();
+        }
+        if (g_modbus_coil_reg.coils & (1 << 2)) {
+            g_modbus_coil_reg.coils &= ~(1 << 2); // Clear remote start trigger coil
+            shared_data_request_state_change(MACHINE_STATE_MOVING);
+        }
+
         if (shared_data_lock(pdMS_TO_TICKS(10))) {
             // Read setpoint from Modbus holding registers
-            g_system_data.position_setpoint = registers_to_float(s_holding_reg.setpoint_hi, s_holding_reg.setpoint_lo);
+            g_system_data.position_setpoint = registers_to_float(g_modbus_holding_reg.setpoint_hi, g_modbus_holding_reg.setpoint_lo);
 
             // Write current position, velocity, state to Modbus input registers
-            float_to_registers(g_system_data.current_position, &s_input_reg.pos_hi, &s_input_reg.pos_lo);
-            float_to_registers(g_system_data.current_velocity, &s_input_reg.vel_hi, &s_input_reg.vel_lo);
-            s_input_reg.state = (uint16_t)shared_data_get_state();
+            float_to_registers(g_system_data.current_position, &g_modbus_input_reg.pos_hi, &g_modbus_input_reg.pos_lo);
+            float_to_registers(g_system_data.current_velocity, &g_modbus_input_reg.vel_hi, &g_modbus_input_reg.vel_lo);
+            g_modbus_input_reg.state = (uint16_t)shared_data_get_state();
+
+            // Update Discrete Inputs register (Bit 0: E-Stop, Bit 1: Start, Bit 2: Safety Enable)
+            uint8_t discrete_bits = 0;
+            if (g_system_data.button_estop)    discrete_bits |= (1 << 0);
+            if (g_system_data.button_start)    discrete_bits |= (1 << 1);
+            if (g_system_data.safety_enable)   discrete_bits |= (1 << 2);
+            g_modbus_discrete_reg.discrete_inputs = discrete_bits;
+
+            // Reflect LED status coil (Bit 0)
+            if (g_system_data.led_status) {
+                g_modbus_coil_reg.coils |= (1 << 0);
+            } else {
+                g_modbus_coil_reg.coils &= ~(1 << 0);
+            }
 
             shared_data_unlock();
         }

@@ -16,7 +16,11 @@ SystemData g_system_data = {
     .position_setpoint = 0.0f,
     .current_position = 0.0f,
     .current_velocity = 0.0f,
-    .machine_state = MACHINE_STATE_IDLE
+    .machine_state = MACHINE_STATE_IDLE,
+    .button_estop = true,
+    .button_start = false,
+    .safety_enable = true,
+    .led_status = false
 };
 
 SemaphoreHandle_t g_system_mutex = NULL;
@@ -32,6 +36,10 @@ void shared_data_init(void) {
         g_system_data.current_position = 0.0f;
         g_system_data.current_velocity = 0.0f;
         g_system_data.machine_state = MACHINE_STATE_IDLE;
+        g_system_data.button_estop = true;
+        g_system_data.button_start = false;
+        g_system_data.safety_enable = true;
+        g_system_data.led_status = false;
         shared_data_unlock();
     }
 }

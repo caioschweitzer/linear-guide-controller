@@ -17,6 +17,22 @@ This document defines the Modbus RTU register map for host integration and descr
 
 ## 2. Modbus Register Map
 
+### Coils (Read / Write) - Function Codes 0x01 / 0x05
+
+| Address | Data Type | Name | Range | Description |
+| :---: | :---: | :--- | :---: | :--- |
+| `0x0000` | Bit | `led_status` | 0 / 1 | Status LED Control & Readback (`GPIO 7` — 1: ON, 0: OFF) |
+| `0x0001` | Bit | `remote_estop` | 0 / 1 | Write `1` to trigger software Emergency Stop |
+| `0x0002` | Bit | `remote_start` | 0 / 1 | Write `1` to trigger state transition to `MOVING` |
+
+### Discrete Inputs (Read Only) - Function Code 0x02
+
+| Address | Data Type | Name | Range | Description |
+| :---: | :---: | :--- | :---: | :--- |
+| `0x0000` | Bit | `button_estop` | 0 / 1 | Emergency Stop Button Pin State (`GPIO 12` — 0: Active/Pressed, 1: OK/Released) |
+| `0x0001` | Bit | `button_start` | 0 / 1 | Start Push Button Pin State (`GPIO 11` — 1: Pressed, 0: Released) |
+| `0x0002` | Bit | `safety_enable` | 0 / 1 | Hardware Safety Enable Output Line (`GPIO 13` — 1: Enabled, 0: Disabled) |
+
 ### Holding Registers (Read / Write) - Function Codes 0x03 / 0x06 / 0x10
 
 | Address | Data Type | Name | Range | Description |

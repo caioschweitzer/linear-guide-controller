@@ -41,6 +41,10 @@ typedef struct {
     float current_position;   // mm
     float current_velocity;   // mm/s
     uint16_t machine_state;   // 0: IDLE, 1: MOVING, 2: EMERGENCY
+    bool button_estop;        // Discrete Input 0x0000 (0: Active, 1: Released)
+    bool button_start;        // Discrete Input 0x0001 (1: Pressed, 0: Released)
+    bool safety_enable;       // Discrete Input 0x0002 (1: Enabled, 0: Disabled)
+    bool led_status;          // Coil 0x0000 (1: ON, 0: OFF)
 } SystemData;
 
 // Global instance & mutex handle

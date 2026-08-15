@@ -29,6 +29,12 @@ extern "C" {
 #define INPUT_REG_START_ADDR    0x0000
 #define INPUT_REG_COUNT         5      // Pos (2 regs float32), Vel (2 regs float32), State (1 reg uint16)
 
+#define DISCRETE_REG_START_ADDR 0x0000
+#define DISCRETE_REG_COUNT      3      // E-Stop (Bit 0), Start (Bit 1), Safety Enable (Bit 2)
+
+#define COIL_REG_START_ADDR     0x0000
+#define COIL_REG_COUNT          3      // LED Status (Bit 0), Remote Emergency (Bit 1), Remote Start (Bit 2)
+
 // Holding register structure
 typedef struct {
     uint16_t setpoint_hi; // MSW
@@ -44,6 +50,22 @@ typedef struct {
     uint16_t vel_lo;   // Float32 LSW
     uint16_t state;    // uint16_t (0: IDLE, 1: MOVING, 2: EMERGENCY)
 } input_reg_params_t;
+
+// Discrete inputs structure (FC 0x02)
+typedef struct {
+    uint8_t discrete_inputs; // Bit 0: E-Stop (0:Active, 1:OK), Bit 1: Start (1:Pressed), Bit 2: Safety Enable (1:Enabled)
+} discrete_reg_params_t;
+
+// Coils structure (FC 0x01 / 0x05)
+typedef struct {
+    uint8_t coils;           // Bit 0: LED Status (1:ON), Bit 1: Remote Emergency (1:Trigger), Bit 2: Remote Start (1:Trigger)
+} coil_reg_params_t;
+
+// Exported buffers for host testing & inspection
+extern holding_reg_params_t g_modbus_holding_reg;
+extern input_reg_params_t g_modbus_input_reg;
+extern discrete_reg_params_t g_modbus_discrete_reg;
+extern coil_reg_params_t g_modbus_coil_reg;
 
 // Function prototypes
 esp_err_t modbus_slave_init(void);
