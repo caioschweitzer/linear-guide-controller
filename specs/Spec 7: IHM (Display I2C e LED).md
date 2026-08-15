@@ -3,36 +3,43 @@ Atue como um Engenheiro de Software Embarcado Sênior especialista em ESP32, Fre
 
 **[CORE_CONTEXT_AND_CONSTRAINTS]**
 
-* **Atenção Crítica de API:** Utilize estritamente as APIs modernas do ESP-IDF v5.x. Para o barramento I2C, utilize o driver atualizado (ex: `driver/i2c_master.h` se aplicável na versão, ou a API padrão `driver/i2c.h` garantindo compatibilidade com v5).
-* **Hardware (IHM):** Display LCD 16x2 via interface I2C (módulo PCF8574). Pinos: `GPIO 1` (SDA) e `GPIO 2` (SCL). LED indicador de status no `GPIO 7`.
-* **Arquitetura FreeRTOS:** O módulo desenvolvido aqui rodará no Core 0 (junto com o Modbus). Ele deve ler a estrutura de dados global compartilhada (criada na Spec 1) utilizando *Mutex* de forma não bloqueante ou com timeout mínimo, para não travar o barramento I2C caso o Core 1 esteja acessando os dados.
-* **Padrão de Testes (Python):** Testes unitários em Python (`pytest`). A lógica de formatação do display deve ser isolada para permitir testes de software independentes de hardware.
+* **Atenção Crítica de API (ESP-IDF v5.x):** Utilize o novo driver I2C Master (`driver/i2c_master.h` no target e abstração `#ifdef HOST_TEST` em testes) para controlar o expansor PCF8574 conectado ao LCD HD44780 16x2.
+* **Pinagem de Hardware (IHM):**
+  * Display LCD I2C (PCF8574): `GPIO 1` (SDA), `GPIO 2` (SCL), Endereço I2C `0x27`, Frequência `100 kHz`.
+  * LED Indicador de Status: `GPIO 7` (Saída digital).
+* **Arquitetura FreeRTOS & C Nativo:** Implemente em **C nativo** (`ihm_display.h` e `ihm_display.c`). A Task da IHM rodará no **Core 0** (compartilhado com Modbus) a uma taxa de 5 Hz (200 ms).
+* **Concorrência Segura por Snapshot:** A IHM deve obter uma cópia local (snapshot) dos dados compartilhados via `shared_data_read` usando Mutex com timeout curto (< 10 ms). A transmissão I2C e a atualização do LED DEVEM ocorrer **fora** da seção crítica do Mutex para não atrasar a Task de Controle PID do Core 1.
+* **Padrão de Testes (Python):** Testes unitários em Python (`pytest`) via `ctypes` compilando o módulo em C para Host.
 
-**[CURRENT_TASK: SPEC 7 - Interface Homem-Máquina (Display I2C e LED)]**
-Nesta etapa, implemente o gerenciador da IHM local, responsável por exibir os dados de telemetria da guia linear e sinalizar visualmente o estado de operação da máquina.
+**[CURRENT_TASK: SPEC 7 - Interface Homem-Máquina (Display I2C e LED - Revisada e Robustecida)]**
+Nesta etapa, implemente o gerenciador da IHM local em C, responsável por formatar e exibir a telemetria da guia linear no LCD 16x2, controlar o LED de status via GPIO 7 e resistir a falhas físicas de I2C.
 
-**1. Requisitos do C++ (IHM e I2C):**
+**1. Requisitos do C Nativo (IHM e Driver LCD):**
 
-* **Classe `DisplayIHM`:** Crie os arquivos `.h` e `.cpp` na pasta `main/`.
-* **Gerenciamento do Display:** Configure o barramento I2C como Master e implemente (ou importe via componente) um driver básico para o LCD HD44780 via expansor PCF8574.
-* **Formatação de Tela:**
-* A classe deve possuir um método de atualização (ex: `update_screen(float position, float velocity, SystemState state)`).
-* **Linha 1:** Deve mostrar a posição (ex: `P: 120.45 mm`).
-* **Linha 2:** Deve mostrar a velocidade e/ou o status de forma compactada, garantindo que nunca ultrapasse os 16 caracteres.
-
-
-* **Gerenciamento do LED (GPIO 7):**
-* Integre a lógica do LED vinculada à Máquina de Estados (Spec 2).
-* `IDLE`: LED apagado ou acesso fixo.
-* `MOVING`: Piscar em baixa frequência (ex: 1 Hz).
-* `EMERGENCY`: Piscar rapidamente (ex: 5 Hz ou padrão SOS).
-
-
+* **Módulo `ihm_display` (`ihm_display.h` / `ihm_display.c`):**
+  * Define `ihm_config_t`: pinos `sda_gpio` (1), `scl_gpio` (2), `led_gpio` (7), `i2c_address` (0x27), `i2c_clk_speed` (100000Hz).
+  * Define `ihm_display_t`: guarda barramento I2C, estado do LED, último tick de pisca e flag `is_connected`.
+* **Driver LCD HD44780 via PCF8574 (4-bits):**
+  * Implementar rotinas de envio de nibles de dados/comandos (RS, RW, EN, Backlight) via barramento I2C.
+  * Inicialização do LCD em modo 4-bits: limpa tela, ativa cursor desabilitado e iluminação traseira (Backlight ON).
+* **Formatação Estrita de Tela (16 Caracteres por Linha):**
+  * Método de formatação `ihm_format_lines(float position_mm, float velocity_mm_s, system_state_t state, char *line1, char *line2)`:
+    - **Linha 1:** Posição em mm no formato `P:%7.2f mm   ` (ex: `P: 120.45 mm   `, exatamente 16 caracteres).
+    - **Linha 2:** Velocidade e Estado no formato `V:%5.1f S:%-6s` (ex: `V: 12.5 S:MOVING`, exatamente 16 caracteres).
+    - Deve utilizar `snprintf` limitando a 17 bytes (16 caracteres + `\0`), impedindo estouro de buffer e desalinhar o display.
+* **Gerenciamento do LED de Status (`GPIO 7`) Não-Bloqueante:**
+  * `ihm_update_led(ihm_display_t *ihm, system_state_t state, uint32_t current_time_ms)`:
+    - `STATE_INIT` / `STATE_IDLE`: LED Aceso Fixo (ON) ou Apagado (OFF).
+    - `STATE_HOMING` / `STATE_MOVING` / `STATE_AUTO`: Pisca Lento a **1 Hz** (500 ms ON / 500 ms OFF).
+    - `STATE_EMERGENCY_STOP` / `STATE_FAULT`: Pisca Rápido a **5 Hz** (100 ms ON / 100 ms OFF).
+    - O controle de temporização DEVE ser feito por diferença de tempo em milissegundos (sem usar `vTaskDelay` interno).
+* **Resiliência a Falhas I2C (Display Desconectado):**
+  * Se a transmissão I2C retornar erro (`ESP_ERR_TIMEOUT` ou NACK), marcar `is_connected = false` e ignorar transmissões de dados pelas próximas iterações. Tentar re-inicializar o I2C a cada 5 segundos sem travar a Task.
 
 **2. Requisitos do Teste Unitário (Python):**
 
 * No diretório `tests/`, crie o arquivo `test_ihm_display.py`.
-* **Cenário de Teste 1 (Formatação de String):** Como não teremos o LCD físico no teste unitário nativo, valide a função puramente em software. Injete valores extremos de posição (ex: `1234.56789`) e confirme se a classe/módulo formata e trunca a *string* corretamente para evitar *overflow* de buffer (> 16 caracteres) na linha do LCD.
-* **Cenário de Teste 2 (Lógica de Pisca do LED):** Teste a função ou máquina de estados responsável pelo *timing* do LED. Injete o estado `EMERGENCY` e simule a passagem de tempo, validando se a alternância de estado (ON/OFF) do pino do LED ocorre no intervalo esperado de alta frequência.
+* **Cenário de Teste 1 (Formatação e Truncamento de LCD):** Teste a função `ihm_format_lines` com posições extremas (ex: `12345.678`, `-999.99`) e nomes de estados. Afirme (*assert*) que as duas strings retornadas possuem exatamente 16 caracteres e terminam adequadamente.
+* **Cenário de Teste 2 (Máquina de Estados e Frequência do LED):** Teste a função `ihm_update_led` simulando passagem de tempo em milissegundos. Valide se em `STATE_MOVING` a alternância ocorre a cada 500 ms (1 Hz) e em `STATE_EMERGENCY_STOP` ocorre a cada 100 ms (5 Hz).
 
-Gere a atualização da árvore de arquivos, os códigos C++ da classe da IHM (e driver LCD se necessário) e o script de teste em Python. Não altere o `main.cpp` nesta etapa.
+Gere os códigos C do módulo `ihm_display` e o script de teste em Python. Não altere o `main.c` nesta etapa.

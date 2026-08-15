@@ -4,9 +4,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdatomic.h>
+#ifndef HOST_TEST
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "driver/gpio.h"
+#else
+typedef uint32_t TickType_t;
+typedef void* SemaphoreHandle_t;
+#define GPIO_NUM_12 12
+#define GPIO_NUM_11 11
+#endif
 
 #ifdef __cplusplus
 extern "C" {
