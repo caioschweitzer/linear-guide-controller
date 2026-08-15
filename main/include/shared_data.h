@@ -41,6 +41,9 @@ typedef struct {
     float position_setpoint;  // mm
     float current_position;   // mm
     float current_velocity;   // mm/s
+    float kp;                 // Proportional gain
+    float ki;                 // Integral gain
+    float kd;                 // Derivative gain
     uint16_t machine_state;   // 0: IDLE, 1: MOVING, 2: EMERGENCY
     bool button_estop;        // Discrete Input 0x0000 (0: Active, 1: Released)
     bool button_start;        // Discrete Input 0x0001 (1: Pressed, 0: Released)

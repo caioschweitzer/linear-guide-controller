@@ -2,6 +2,7 @@
 #include "shared_data.h"
 #include "gpio_safety.h"
 #include <string.h>
+#include <math.h>
 
 #ifndef HOST_TEST
 #include "esp_log.h"
@@ -14,8 +15,8 @@
 #endif
 
 // Internal buffers mapped to Modbus stack
-holding_reg_params_t g_modbus_holding_reg = {0, 0, 0};
-input_reg_params_t g_modbus_input_reg = {0, 0, 0, 0, 0};
+holding_reg_params_t g_modbus_holding_reg = {0};
+input_reg_params_t g_modbus_input_reg = {0};
 discrete_reg_params_t g_modbus_discrete_reg = {0};
 coil_reg_params_t g_modbus_coil_reg = {0};
 
@@ -38,6 +39,12 @@ static float registers_to_float(uint16_t hi, uint16_t lo) {
 }
 
 esp_err_t modbus_slave_init(void) {
+    // Populate default holding register values
+    float_to_registers(0.0f, &g_modbus_holding_reg.setpoint_hi, &g_modbus_holding_reg.setpoint_lo);
+    g_modbus_holding_reg.command = CMD_NONE;
+    float_to_registers(2.0f, &g_modbus_holding_reg.kp_hi, &g_modbus_holding_reg.kp_lo);
+    float_to_registers(0.5f, &g_modbus_holding_reg.ki_hi, &g_modbus_holding_reg.ki_lo);
+    float_to_registers(0.05f, &g_modbus_holding_reg.kd_hi, &g_modbus_holding_reg.kd_lo);
 #ifndef HOST_TEST
     // 1. Suppress plain ASCII logging on UART0 to avoid polluting Modbus RTU frames
     esp_log_level_set("*", ESP_LOG_NONE);
@@ -144,6 +151,19 @@ static void modbus_slave_task(void *pvParameters) {
         if (shared_data_lock(pdMS_TO_TICKS(10))) {
             // Read setpoint from Modbus holding registers
             g_system_data.position_setpoint = registers_to_float(g_modbus_holding_reg.setpoint_hi, g_modbus_holding_reg.setpoint_lo);
+
+            // Synchronize PID gains with Modbus holding registers
+            float mb_kp = registers_to_float(g_modbus_holding_reg.kp_hi, g_modbus_holding_reg.kp_lo);
+            float mb_ki = registers_to_float(g_modbus_holding_reg.ki_hi, g_modbus_holding_reg.ki_lo);
+            float mb_kd = registers_to_float(g_modbus_holding_reg.kd_hi, g_modbus_holding_reg.kd_lo);
+
+            if (!isnan(mb_kp) && !isinf(mb_kp) && mb_kp >= 0.0f) g_system_data.kp = mb_kp;
+            if (!isnan(mb_ki) && !isinf(mb_ki) && mb_ki >= 0.0f) g_system_data.ki = mb_ki;
+            if (!isnan(mb_kd) && !isinf(mb_kd) && mb_kd >= 0.0f) g_system_data.kd = mb_kd;
+
+            float_to_registers(g_system_data.kp, &g_modbus_holding_reg.kp_hi, &g_modbus_holding_reg.kp_lo);
+            float_to_registers(g_system_data.ki, &g_modbus_holding_reg.ki_hi, &g_modbus_holding_reg.ki_lo);
+            float_to_registers(g_system_data.kd, &g_modbus_holding_reg.kd_hi, &g_modbus_holding_reg.kd_lo);
 
             // Write current position, velocity, state to Modbus input registers
             float_to_registers(g_system_data.current_position, &g_modbus_input_reg.pos_hi, &g_modbus_input_reg.pos_lo);

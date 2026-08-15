@@ -38,6 +38,9 @@ The controller implements a full slave stack based on the standard `esp_modbus` 
 | :--- | :--- | :--- | :--- | :--- |
 | `0x0000` - `0x0001` | `position_setpoint` | Float32 (Big-Endian) | mm | Target linear position setpoint (0.0 to 424.115 mm). |
 | `0x0002` | `command` | uint16 | Enumerated | `1` = START, `2` = STOP, `3` = RESET, `99` = EMERGENCY |
+| `0x0003` - `0x0004` | `kp` | Float32 (Big-Endian) | Dimensionless | Proportional Gain $K_p$ (Default: `2.0`). |
+| `0x0005` - `0x0006` | `ki` | Float32 (Big-Endian) | 1/s | Integral Gain $K_i$ (Default: `0.5`). |
+| `0x0007` - `0x0008` | `kd` | Float32 (Big-Endian) | s | Derivative Gain $K_d$ (Default: `0.05`). |
 
 ### 2.4 Input Registers (Word Read-Only - FC 0x04)
 

@@ -143,6 +143,37 @@ def test_holding_register_setpoint_write_read(modbus_client):
         assert abs(read_setpoint - target_setpoint) < 1e-3, f"Expected {target_setpoint}, got {read_setpoint}"
 
 
+def test_holding_register_pid_gains_write_read(modbus_client):
+    with timeout_guardrail(TEST_TIMEOUT_SEC):
+        builder = BinaryPayloadBuilder(byteorder=Endian.BIG, wordorder=Endian.BIG)
+        target_kp, target_ki, target_kd = 4.5, 1.2, 0.08
+        builder.add_32bit_float(target_kp)
+        builder.add_32bit_float(target_ki)
+        builder.add_32bit_float(target_kd)
+        payload = builder.to_registers()
+
+        # Write 32-bit floats to Holding Registers 0x0003 to 0x0008 (6 registers)
+        write_result = modbus_client.write_registers(0x0003, payload, slave=SLAVE_ID)
+        if write_result.isError():
+            pytest.skip("Physical ESP32 Modbus hardware not connected.")
+        assert not write_result.isError(), "Modbus write_registers for PID gains failed"
+
+        time.sleep(0.05)
+
+        # Read back Holding Registers 0x0003 to 0x0008
+        read_result = modbus_client.read_holding_registers(0x0003, count=6, slave=SLAVE_ID)
+        assert not read_result.isError(), "Modbus read_holding_registers for PID gains failed"
+
+        decoder = BinaryPayloadDecoder.fromRegisters(read_result.registers, byteorder=Endian.BIG, wordorder=Endian.BIG)
+        read_kp = decoder.decode_32bit_float()
+        read_ki = decoder.decode_32bit_float()
+        read_kd = decoder.decode_32bit_float()
+
+        assert abs(read_kp - target_kp) < 1e-3, f"Expected Kp {target_kp}, got {read_kp}"
+        assert abs(read_ki - target_ki) < 1e-3, f"Expected Ki {target_ki}, got {read_ki}"
+        assert abs(read_kd - target_kd) < 1e-3, f"Expected Kd {target_kd}, got {read_kd}"
+
+
 def test_input_registers_read_initial_state(modbus_client):
     with timeout_guardrail(TEST_TIMEOUT_SEC):
         # Read Input Registers 0x0000 to 0x0004 (5 registers)

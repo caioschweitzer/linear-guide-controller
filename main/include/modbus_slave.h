@@ -24,7 +24,7 @@ extern "C" {
 
 // Modbus Register Map Offsets & Sizes
 #define HOLDING_REG_START_ADDR  0x0000
-#define HOLDING_REG_COUNT       3      // Setpoint (2 x 16-bit), Command (1 x 16-bit)
+#define HOLDING_REG_COUNT       9      // Setpoint (2), Command (1), Kp (2), Ki (2), Kd (2)
 
 #define INPUT_REG_START_ADDR    0x0000
 #define INPUT_REG_COUNT         5      // Pos (2 regs float32), Vel (2 regs float32), State (1 reg uint16)
@@ -37,9 +37,15 @@ extern "C" {
 
 // Holding register structure
 typedef struct {
-    uint16_t setpoint_hi; // MSW
-    uint16_t setpoint_lo; // LSW
-    uint16_t command;     // 1: START, 2: STOP, 3: RESET, 99: SIMULATE_EMERGENCY
+    uint16_t setpoint_hi; // 0x0000 Float32 MSW
+    uint16_t setpoint_lo; // 0x0001 Float32 LSW
+    uint16_t command;     // 0x0002 uint16 (1: START, 2: STOP, 3: RESET, 99: SIMULATE_EMERGENCY)
+    uint16_t kp_hi;       // 0x0003 Float32 MSW
+    uint16_t kp_lo;       // 0x0004 Float32 LSW
+    uint16_t ki_hi;       // 0x0005 Float32 MSW
+    uint16_t ki_lo;       // 0x0006 Float32 LSW
+    uint16_t kd_hi;       // 0x0007 Float32 MSW
+    uint16_t kd_lo;       // 0x0008 Float32 LSW
 } holding_reg_params_t;
 
 // Input register structure

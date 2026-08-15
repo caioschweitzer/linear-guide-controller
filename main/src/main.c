@@ -52,10 +52,15 @@ static void control_loop_task(void *pvParameters) {
         // 3. Compute Linear Kinematics (Position & Velocity)
         current_pos_mm = kinematics_update(&g_kinematics, raw_counts, 0.01f, &current_vel_mm_s);
 
+        float kp = 2.0f, ki = 0.5f, kd = 0.05f;
+
         // 4. Fast Snapshot Mutex Lock (< 1 ms hold)
         if (shared_data_lock(pdMS_TO_TICKS(1))) {
             position_setpoint = g_system_data.position_setpoint;
             state = (machine_state_t)g_system_data.machine_state;
+            kp = g_system_data.kp;
+            ki = g_system_data.ki;
+            kd = g_system_data.kd;
 
             // Publish telemetry to shared structure for Core 0 (IHM & Modbus)
             g_system_data.current_position = current_pos_mm;
@@ -65,6 +70,11 @@ static void control_loop_task(void *pvParameters) {
             g_system_data.safety_enable = (gpio_get_level(GPIO_SAFETY_ENABLE_PIN) != 0);
             g_system_data.led_status = (g_ihm.led_state != 0);
             shared_data_unlock();
+        }
+
+        // Dynamically apply updated PID gains if changed via Modbus
+        if (kp != g_pid.config.kp || ki != g_pid.config.ki || kd != g_pid.config.kd) {
+            pid_set_gains(&g_pid, kp, ki, kd);
         }
 
         // 5. Mechanical Boundary Clamping

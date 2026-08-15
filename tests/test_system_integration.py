@@ -18,6 +18,9 @@ class SystemDataStruct(ctypes.Structure):
         ("position_setpoint", ctypes.c_float),
         ("current_position", ctypes.c_float),
         ("current_velocity", ctypes.c_float),
+        ("kp", ctypes.c_float),
+        ("ki", ctypes.c_float),
+        ("kd", ctypes.c_float),
         ("machine_state", ctypes.c_uint16),
     ]
 
