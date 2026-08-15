@@ -11,9 +11,11 @@ Linear actuators driven by DC motors paired with optical quadrature encoders pre
 
 ---
 
-## 2. Mechanical System Parameters
+## 2. Mechanical System Parameters & Physical Geometry
 
-The system is calibrated around a lead-screw linear guide driven by a DC motor equipped with an optical quadrature encoder:
+The system is calibrated around a lead-screw linear guide driven by a DC motor equipped with an optical quadrature encoder and position limit/home sensors:
+
+### 2.1 Kinematic & Motion Parameters
 
 | Mechanical Property | Symbol | Numerical Value | Physical Unit |
 | :--- | :--- | :--- | :--- |
@@ -23,6 +25,19 @@ The system is calibrated around a lead-screw linear guide driven by a DC motor e
 | Encoder Quadrature Multiplier | $Q$ | `4` | Edges per pulse (x4 mode) |
 | Effective Edges per Rev | $N_{\text{quad}}$ | `4000` | Counts / revolution |
 | Minimum Deadband Threshold | $e_{\text{dead}}$ | `0.1` | mm |
+
+### 2.2 Mechanical Structural & Sensor Spatial Dimensions
+
+| Component / Physical Feature | Dimension | Physical Unit | Description / Notes |
+| :--- | :--- | :--- | :--- |
+| **Linear Guide Total Length** | `800.00` | mm (`80 cm`) | Total physical structural length of the rail |
+| **Motor Shaft Inner Diameter** | `13.50` | mm | Shaft bore / coupling inner diameter |
+| **Motor Shaft Outer Diameter** | `16.04` | mm | Shaft external diameter |
+| **Sensor Physical Dimension** | `24.30` | mm | Physical size / width of sensor housing |
+| **Start Datum to Home Sensor** | `37.68` | mm | Distance from physical start datum to Home sensor |
+| **Start Datum to FC0 Sensor** | `700.00` | mm (`70 cm`) | Distance from physical start datum to limit switch FC0 |
+| **Inter-Sensor Distance (FC0 to FC1)** | `9.18` | mm | Separation distance between limit switches FC0 and FC1 |
+| **End of Guide to FC1 Sensor** | `38.58` | mm | Distance from physical rail end to limit switch FC1 |
 
 ---
 
