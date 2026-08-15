@@ -39,6 +39,62 @@ The system is calibrated around a lead-screw linear guide driven by a DC motor e
 | **Inter-Sensor Distance (FC0 to FC1)** | `9.18` | mm | Separation distance between limit switches FC0 and FC1 |
 | **End of Guide to FC1 Sensor** | `38.58` | mm | Distance from physical rail end to limit switch FC1 |
 
+### 2.3 Physical System Diagram & Spatial Layout
+
+#### Mechanical Assembly & Sensor Spatial Layout
+```text
+  [DC Motor & Optical Encoder]
+  └─ Shaft: ID 13.50 mm, OD 16.04 mm
+        │
+        ▼
+   [Coupling] ───► [Lead Screw: Pitch 42.4115 mm/rev]
+                         │
+                         ▼ (Carriage Motion x(t))
+   Start                                                                             End
+   (0.0 mm)     [Home Sensor]                           [FC0]  [FC1]               (800.0 mm)
+      │               │                                   │      │                     │
+      ├──── 37.68mm ──┤──────────── 700.00mm ─────────────┼─9.18mm─┼───── 38.58mm ──────┤
+      │               │                                   │      │                     │
+      ▼               ▼                                   ▼      ▼                     ▼
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │                           Linear Guide Rail (800 mm Total)                           │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Closed-Loop Architecture Block Diagram
+```mermaid
+graph LR
+    subgraph Host / Interface
+        MB[Modbus RTU Master]
+        LCD[HD44780 I2C Display]
+    end
+
+    subgraph ESP32-S3 Microcontroller
+        MB_Task[Core 0: Modbus & IHM Task]
+        PID[Core 1: 100 Hz PID Control Task]
+        EMA[Velocity EMA Filter]
+    end
+
+    subgraph Hardware Actuation & Sensing
+        PWM[MCPWM Driver GPIO 4, 5, 6]
+        DC[DC Motor + Lead Screw Rail]
+        ENC[Optical Encoder GPIO 14, 15]
+        PCNT[PCNT Hardware Counter]
+        SENS[Limit / E-Stop Switches GPIO 11, 12]
+    end
+
+    MB <-->|RS485 UART0| MB_Task
+    MB_Task <-->|Shared Mutex| PID
+    PID -->|PWM & Direction| PWM
+    PWM --> DC
+    DC --> ENC
+    ENC --> PCNT
+    PCNT -->|Counts| PID
+    PID --> EMA
+    MB_Task -->|I2C| LCD
+    SENS -->|IRAM ISR Interrupt| PID
+```
+
 ---
 
 ## 3. Mathematical Kinematics & Scale Factors
