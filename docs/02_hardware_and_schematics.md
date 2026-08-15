@@ -75,3 +75,24 @@ The actuator motor is driven by a standard dual-channel H-Bridge driver (e.g. L2
 ### 4.2 RS485 Modbus RTU Bus
 - Connected to `GPIO 43` (TX) and `GPIO 44` (RX) via an external MAX485 / SP3485 transceiver (UART0 default pins).
 - Default settings: 115,200 Baud, 8 Data Bits, No Parity, 1 Stop Bit (8N1).
+
+---
+
+## 5. ESP32-S3 Datasheet Pin Routing & Compliance Audit
+
+A comprehensive hardware pin routing audit was performed against the Espressif ESP32-S3 Datasheet (`docs/esp32-s3_datasheet_en.pdf`). The system's pin routing complies with all hardware silicon constraints:
+
+1. **Strapping Pin Isolation**:
+   - ESP32-S3 hardware strapping pins (`GPIO 0`, `GPIO 3`, `GPIO 45`, `GPIO 46`) control chip boot modes and `VDD_SPI` power rail voltage.
+   - **Verification**: None of the active system signals use these strapping pins, preventing boot mode corruption during startup.
+
+2. **SPI Flash & PSRAM Protection**:
+   - Octal SPI / Quad SPI Flash and PSRAM utilize `GPIO 26` through `GPIO 37`.
+   - **Verification**: All active system pins (`GPIO 1, 2, 4, 5, 6, 7, 11, 12, 13, 14, 15, 43, 44`) are fully isolated from the internal SPI memory bus.
+
+3. **Native USB & JTAG Pin Preservation**:
+   - Native USB OTG (`GPIO 19` D-, `GPIO 20` D+) and JTAG debugging pins (`GPIO 39-42`) are reserved for hardware debugging.
+   - **Verification**: Zero signal collisions with native USB and JTAG debug hardware.
+
+4. **Hardware UART0 COM Port Mapping**:
+   - `GPIO 43` (TXD0) and `GPIO 44` (RXD0) are the native UART0 pins, directly connected to the onboard USB-to-Serial converter (CP210x / CH340), exposing the Modbus RTU interface transparently over USB-C.

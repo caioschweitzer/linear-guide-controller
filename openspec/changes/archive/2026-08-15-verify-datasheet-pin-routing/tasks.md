@@ -5,5 +5,5 @@
 
 ## 2. Documentation and Spec Synchronization
 
-- [ ] 2.1 Update Chapter 2 engineering manual (`docs/02_hardware_and_schematics.md`) with validated pinout tables and electrical parameters
-- [ ] 2.2 Synchronize OpenSpec capability specifications (`openspec/specs/system-documentation/spec.md`) with verified hardware pinouts
+- [x] 2.1 Update Chapter 2 engineering manual (`docs/02_hardware_and_schematics.md`) with validated pinout tables and electrical parameters
+- [x] 2.2 Synchronize OpenSpec capability specifications (`openspec/specs/system-documentation/spec.md`) with verified hardware pinouts

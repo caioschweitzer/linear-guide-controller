@@ -8,7 +8,7 @@ The system SHALL provide complete technical documentation in the project reposit
 
 #### Scenario: Hardware Wiring and Pinout Guidance
 - **WHEN** a developer inspects the documentation manual
-- **THEN** the documentation SHALL clearly map ESP32-S3 GPIO pins to MCPWM motor outputs (GPIO 4, 5, 6), PCNT encoder inputs (GPIO 14, 15), GPIO safety interrupts (GPIO 11, 12, 13), I2C LCD display (GPIO 1, 2), Status LED (GPIO 7), and Modbus RTU UART0 (TX 43, RX 44).
+- **THEN** the documentation SHALL clearly map ESP32-S3 GPIO pins to MCPWM motor outputs (GPIO 4, 5, 6), PCNT encoder inputs (GPIO 14, 15), GPIO safety interrupts (GPIO 11, 12, 13), I2C LCD display (GPIO 1, 2), Status LED (GPIO 7), and Modbus RTU UART0 (TX 43, RX 44), confirming non-interference with strapping pins (GPIO 0, 3, 45, 46) and SPI Flash/PSRAM lines (GPIO 26-37).
 
 #### Scenario: Software Architecture and Task Pinning Guidance
 - **WHEN** a developer reviews the FreeRTOS dual-core task architecture
