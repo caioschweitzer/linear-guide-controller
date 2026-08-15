@@ -31,7 +31,7 @@ pytest . -v -s
 ### 2. ESP32-S3 Firmware Compilation & Flashing
 To compile and flash the firmware onto the physical ESP32-S3 microcontroller:
 ```bash
-source /home/caiu/.espressif/v6.0/esp-idf/export.sh
+source /home/{USER}/.espressif/v6.0/esp-idf/export.sh
 idf.py build
-idf.py -p /dev/ttyACM0 flash
+idf.py -p /dev/{PORT} flash
 ```
