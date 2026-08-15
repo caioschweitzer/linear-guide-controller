@@ -4,28 +4,39 @@ Atue como um Engenheiro de Software Embarcado Sênior especialista em ESP32, Fre
 **[CORE_CONTEXT_AND_CONSTRAINTS]**
 
 * **Atenção Crítica de API:** Utilize estritamente as APIs modernas do ESP-IDF v5.x. É **obrigatório** o uso de `<driver/pulse_cnt.h>` (arquitetura baseada em `pcnt_unit_handle_t` e `pcnt_channel_handle_t`). O uso de APIs legadas (`driver/pcnt.h`) resultará em falha no build.
-* **Física da Planta:** Encoder de 250 PPR conectado aos pinos `GPIO 14` (Canal A) e `GPIO 15` (Canal B).
-* **Arquitetura FreeRTOS:** Sistema dividido entre o Core 0 (I/O e Modbus) e Core 1 (Controle e Leitura). O módulo desenvolvido aqui será instanciado no Core 1.
-* **Padrão de Testes (Python):** Testes unitários/HIL em Python (`pytest`).
+* **Física da Planta & Hardware:** Encoder incremental de 250 PPR conectado aos pinos `GPIO 14` (Canal A) e `GPIO 15` (Canal B). A leitura de quadratura completa em bordas duplas (X4) resulta em 1000 contagens/volta.
+* **Arquitetura FreeRTOS & C/C++:** O projeto utiliza C como linguagem base (`main.c`, `shared_data.c`). O módulo de encoder deve fornecer uma interface C nativa (`encoder_pcnt.h` e `encoder_pcnt.c`) thread-safe para integração perfeita no Core 1.
+* **Padrão de Testes (Python):** Testes unitários automatizados em Python (`pytest`) com suporte a modo de emulação de host (`#ifdef HOST_TEST` ou mocks).
 
-**[CURRENT_TASK: SPEC 4 - Abstração do Encoder (PCNT)]**
-Nesta etapa, crie o módulo de abstração de hardware responsável por configurar e ler o encoder incremental utilizando o periférico PCNT em modo de quadratura, desonerando a CPU.
+**[CURRENT_TASK: SPEC 4 - Abstração do Encoder (PCNT - Revisada e Robustecida)]**
+Nesta etapa, crie o módulo de abstração de hardware responsável por configurar e ler o encoder incremental utilizando o periférico PCNT em modo de quadratura, desonerando a CPU e tratando estouros de hardware.
 
-**1. Requisitos do C++ (Abstração de Hardware - PCNT):**
+**1. Requisitos da Abstração de Hardware do PCNT (`encoder_pcnt.h` / `encoder_pcnt.c`):**
 
-* **Classe `EncoderDriver`:** Crie os arquivos `.h` e `.cpp` na pasta `main/`. A classe deve encapsular toda a lógica e os *handles* do PCNT.
-* **Configuração de Quadratura:** Inicialize a unidade PCNT e configure dois canais. O hardware deve ser parametrizado para avaliar bordas de subida e descida em ambos os canais (A e B) para garantir a leitura de quadratura completa (multiplicando os 250 PPR por 4 = 1000 contagens por volta).
-* **Filtro Antirruído:** Configure o `pcnt_glitch_filter_config_t` para ignorar picos espúrios (ruído de alta frequência comum próximo a motores CC), configurando o `max_glitch_ns` para um valor seguro.
-* **Interface Limpa:** A classe deve prover métodos públicos simples, como `init()`, `get_count(int32_t* current_count)` e `clear_count()`.
+* **Configuração de Quadratura X4:**
+  * Inicializar a unidade PCNT (`pcnt_unit_handle_t`) e configurar dois canais (`pcnt_channel_handle_t`).
+  * Parametrizar bordas de subida e descida em ambos os canais para multiplicar os 250 PPR por 4 = 1000 contagens por volta.
+* **Resistores Internos de Pull-Up:**
+  * Habilitar resistores de Pull-Up internos (`GPIO_PULLUP_ONLY`) nos pinos `GPIO 14` e `GPIO 15` para evitar entradas flutuantes e ruídos eletromagnéticos da ponte H.
+* **Filtro Antirruído (Glitch Filter):**
+  * Habilitar e configurar o `pcnt_glitch_filter_config_t` com `max_glitch_ns = 1000` ($1\mu s$) para rejeitar picos de alta frequência da chaveamento do motor CC.
+* **Tratamento de Overflow de Hardware (16-bit para 32-bit Accumulator):**
+  * O hardware PCNT é limitado a 16 bits assinados ($-32.768$ a $+32.767$).
+  * Configurar *watch points* de evento (`PCNT_UNIT_WATCH_POINT_MAX` em $+30.000$ e `PCNT_UNIT_WATCH_POINT_MIN` em $-30.000$).
+  * Registrar ISR callback (`pcnt_unit_register_event_callbacks`) para acumular estouros em um contador de software de 32 bits (`accumulated_overflows`).
+  * A contagem total acumulada deve ser calculada por:
+    $$\text{contagem\_total} = (\text{accumulated\_overflows} \times 30000) + \text{pcnt\_get\_count()}$$
+* **Zeramento Atômico (`encoder_clear_count`):**
+  * O método de zeramento deve resetar **simultaneamente e de forma atômica** (`portMUX_TYPE` spinlock) o registrador de hardware (`pcnt_unit_clear_count`) e o acumulador de software (`accumulated_overflows = 0`).
+* **Suporte a Teste em Host (`HOST_TEST`):**
+  * Incluir compilação condicional que permita emular injeção de contagens e estouros no PC sem dependência dos registradores físicos do ESP32 durante a execução do `pytest`.
 
 **2. Requisitos do Teste Unitário (Python):**
 
 * No diretório `tests/`, crie o arquivo `test_encoder_pcnt.py`.
-* **Cenário de Teste HIL/Interface:** Como este módulo é dependente de hardware, o teste em Python deve validar a interface e o comportamento esperado do driver. Escreva um teste que:
-1. Solicite (via *mock* ou protocolo HIL) a contagem inicial, validando se é $0$.
-2. Simule o recebimento de pulsos.
-3. Envie o comando de `clear_count()` e faça um *assert* verificando se a próxima leitura retorna $0$ obrigatoriamente, provando que o reset do periférico via hardware (ou software interno) está funcional.
+* **Cenário de Teste 1 (Inicialização e Leitura Bruta):** Valide que a inicialização reporta contagem inicial $0$.
+* **Cenário de Teste 2 (Simulação de Pulsos e Quadratura):** Simule a injeção de pulsos de quadratura e verifique o acúmulo correto de contagens.
+* **Cenário de Teste 3 (Estouro do Contador 16-bit):** Simule injeção de contagens acima de $30.000$ e valide se o acumulador de software de 32 bits mantém a posição contínua sem descontinuidades ou saltos negativos.
+* **Cenário de Teste 4 (Zeramento Atômico):** Injete contagens acumuladas altas e chame `encoder_clear_count()`. Afirme (*assert*) que a leitura subsequente retorna obrigatoriamente $0$.
 
-
-
-Gere a atualização da árvore de arquivos, os códigos C++ da classe de abstração do PCNT e o script de teste em Python. Não altere o `main.cpp` nesta etapa, prepare o módulo para integração futura.
+Gere a atualização dos códigos do módulo `encoder_pcnt` e o script de teste em Python. Não altere o `main.c` nesta etapa, apenas entregue a biblioteca pronta para integração futura.
