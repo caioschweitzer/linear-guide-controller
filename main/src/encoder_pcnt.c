@@ -57,7 +57,7 @@ esp_err_t encoder_init(encoder_driver_t *driver, const encoder_config_t *config)
     // Channel A Config
     pcnt_chan_config_t chan_a_config = {
         .edge_gpio_num = cfg.gpio_a,
-        .ctrl_gpio_num = cfg.gpio_b,
+        .level_gpio_num = cfg.gpio_b,
     };
     ret = pcnt_new_channel(driver->pcnt_unit, &chan_a_config, &driver->pcnt_chan_a);
     if (ret != ESP_OK) return ret;
@@ -65,7 +65,7 @@ esp_err_t encoder_init(encoder_driver_t *driver, const encoder_config_t *config)
     // Channel B Config
     pcnt_chan_config_t chan_b_config = {
         .edge_gpio_num = cfg.gpio_b,
-        .ctrl_gpio_num = cfg.gpio_a,
+        .level_gpio_num = cfg.gpio_a,
     };
     ret = pcnt_new_channel(driver->pcnt_unit, &chan_b_config, &driver->pcnt_chan_b);
     if (ret != ESP_OK) return ret;

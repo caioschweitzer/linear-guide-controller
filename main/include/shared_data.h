@@ -27,8 +27,9 @@ int gpio_get_level(int pin);
 extern "C" {
 #endif
 
-#define GPIO_EMERGENCY_PIN GPIO_NUM_12
-#define GPIO_START_PIN     GPIO_NUM_11
+#define GPIO_EMERGENCY_PIN     GPIO_NUM_12
+#define GPIO_START_PIN         GPIO_NUM_11
+#define GPIO_SAFETY_ENABLE_PIN GPIO_NUM_13
 
 typedef enum {
     MACHINE_STATE_IDLE = 0,

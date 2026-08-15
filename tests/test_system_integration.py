@@ -82,7 +82,8 @@ def load_system_lib():
     so_path = os.path.join(os.path.dirname(__file__), "libsystem_integration.so")
     if not os.path.exists(so_path):
         import subprocess
-        src_dir = os.path.join(os.path.dirname(__file__), "..", "main")
+        src_dir = os.path.join(os.path.dirname(__file__), "..", "main", "src")
+        inc_dir = os.path.join(os.path.dirname(__file__), "..", "main", "include")
         c_files = [
             os.path.join(src_dir, f) for f in [
                 "shared_data.c", "gpio_safety.c", "linear_kinematics.c",
@@ -90,7 +91,7 @@ def load_system_lib():
                 "ihm_display.c", "modbus_slave.c"
             ]
         ]
-        cmd = ["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST"] + c_files + ["-o", so_path, f"-I{src_dir}"]
+        cmd = ["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST"] + c_files + ["-o", so_path, f"-I{inc_dir}"]
         subprocess.run(cmd, check=True)
 
     lib = ctypes.CDLL(so_path)

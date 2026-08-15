@@ -1,55 +1,37 @@
-# ESP32-S3 Linear Actuator Controller - Full Technical Manual
+# Master Technical Manual: ESP32-S3 Linear Actuator Controller
 
-Welcome to the technical documentation manual for the **ESP32-S3 Deterministic Linear Actuator Controller**. This documentation provides hardware pinout mappings, FreeRTOS multi-core software architecture guidelines, Modbus RTU register specifications, and automated host testing procedures.
-
----
-
-## 📚 Technical Documentation Structure
-
-1. 🔌 **[Hardware Wiring & Electrical Pinout Guide](hardware_wiring.md)**
-   - Complete ESP32-S3 GPIO Mapping Table (MCPWM, PCNT, Safety, I2C, UART0).
-   - Electrical Power Specifications & Star Grounding Guidelines.
-   - Emergency Stop (E-Stop) Hardware Cutoff Circuit Schematics.
-
-2. ⚙️ **[Software Architecture & Real-Time Control](software_architecture.md)**
-   - FreeRTOS Dual-Core Task Distribution (Core 1 Real-time PID Loop / Core 0 I/O & Modbus).
-   - Thread-Safe Shared Data & Mutex Snapshot IPC Patterns.
-   - Finite State Machine (FSM) State Transition Rules.
-   - Linear Kinematics Equations & Exponential Moving Average (EMA) Velocity Filtering.
-   - Closed-Loop PID Algorithm Parameters & Safety Feature Guardrails.
-
-3. 📡 **[Modbus RTU Register Map & Testing Suite](modbus_and_testing.md)**
-   - Modbus RTU Slave Configuration (115200 baud, 8N1, Slave ID 1).
-   - Holding & Input Register Memory Maps (Float32 IEEE 754 Big-Endian).
-   - Host Integration Testing (`pytest` + `ctypes` Host Shared Library execution).
+Welcome to the comprehensive technical documentation suite for the ESP32-S3 Linear Actuator Controller.
 
 ---
 
-## 🚀 Quick Start Guide
+## 📚 Technical Manual Chapters
 
-### Building Firmware (ESP-IDF v5.x)
+This documentation suite is organized into 5 dedicated technical chapters:
+
+| Chapter | Document Title | Description & Content Overview |
+| :--- | :--- | :--- |
+| **Chapter 1** | [System Overview & Physical Kinematics](01_system_overview_and_physics.md) | Problem statement, lead screw geometry, scale factors ($K_{\text{scale}} = 0.010602875$), EMA velocity filter, and control requirements. |
+| **Chapter 2** | [Hardware Electronics & Electrical Wiring](02_hardware_and_schematics.md) | Complete GPIO pinout table, hardware MOSFET E-stop cutoff gate, MCPWM motor driver interface, and LCD display wiring. |
+| **Chapter 3** | [Dual-Core FreeRTOS Architecture & Kernel IPC](03_software_architecture_freertos.md) | Core 0/1 task pinning, `g_system_mutex` snapshot IPC, C11 `_Atomic` state machine transitions, and task notification flow. |
+| **Chapter 4** | [Industrial Modbus RTU Protocol Specification](04_modbus_rtu_and_communication.md) | RS485 parameters, complete 4-table Modbus register map (Coils, Discrete Inputs, Holding, Input Registers), and ASCII sequence diagrams. |
+| **Chapter 5** | [Host-Native Unit & Integration Testing Suite](05_testing_and_hil_simulation.md) | GCC `-DHOST_TEST` simulation architecture, Python `ctypes` binding, and exhaustive breakdown of all 32 pytest test cases. |
+
+---
+
+## 🛠️ Quick Start & Build Instructions
+
+### 1. Host Test Execution (`pytest`)
+To run all 32 host integration tests on your Linux workstation:
 ```bash
-# Set up ESP-IDF target
-idf.py set-target esp32s3
+cd tests
+source .venv/bin/activate
+pytest . -v -s
+```
 
-# Build firmware binary
+### 2. ESP32-S3 Firmware Compilation & Flashing
+To compile and flash the firmware onto the physical ESP32-S3 microcontroller:
+```bash
+source /home/caiu/.espressif/v6.0/esp-idf/export.sh
 idf.py build
-
-# Flash & Monitor ESP32-S3
-idf.py -p /dev/ttyUSB0 flash monitor
+idf.py -p /dev/ttyACM0 flash
 ```
-
-### Running Host Test Suite (Linux Native)
-```bash
-# Execute unit & integration test suites
-tests/.venv/bin/pytest tests/
-```
-
----
-
-## 🛡️ System Features Summary
-
-- **Deterministic Control**: 100 Hz PID control loop pinned to FreeRTOS Core 1.
-- **Hardware Safety Cutoff**: IRAM-resident ISR handles Emergency E-Stop interrupts with sub-microsecond response and hardware enable signal pull-down.
-- **Linear Stroke**: $424.115\text{ mm}$ travel range clamped automatically.
-- **Automated Verification**: 29 automated test cases covering state machine, kinematics, PID, motor drivers, encoder counters, LCD display, Modbus RTU, and integrated closed-loop control.
