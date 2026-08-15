@@ -4,28 +4,42 @@ Atue como um Engenheiro de Software Embarcado Sênior especialista em ESP32, Fre
 **[CORE_CONTEXT_AND_CONSTRAINTS]**
 
 * **Física da Planta:** Avanço linear de 42.4115 mm/volta. Resolução do sistema de 0.0424115 mm/contagem.
-* **Arquitetura FreeRTOS:** O módulo desenvolvido aqui será instanciado no Core 1 pela Task de Controle, rodando a uma frequência fixa (ex: 100Hz).
-* **Padrão de Testes (Python):** Testes unitários/HIL em Python (`pytest`). A lógica de negócio em C++ deve ser estritamente desacoplada do hardware para suportar essa validação.
+* **Arquitetura FreeRTOS & C/C++:** O controlador PID deve ser implementado em **C nativo** (`pid_controller.h` e `pid_controller.c`) com struct de contexto `pid_controller_t`, sem nenhuma dependência de bibliotecas do ESP-IDF (como `freertos` ou `driver`), garantindo 100% de desacoplamento para compilação pura em Host.
+* **Frequência de Execução:** Instanciado no Core 1 pela Task de Controle a 100 Hz ($\Delta t = 0.01\text{ s}$).
+* **Padrão de Testes (Python):** Testes unitários em Python (`pytest`) utilizando `ctypes` e compilação condicional em Host.
 
-**[CURRENT_TASK: SPEC 6 - Controlador PID e Anti-Windup]**
-Nesta etapa, implemente o algoritmo de controle PID em uma classe isolada. A classe não deve ter nenhuma dependência das bibliotecas do ESP-IDF (como `freertos` ou `driver`), consistindo apenas em C++ puro.
+**[CURRENT_TASK: SPEC 6 - Controlador PID com Anti-Windup e Filtro Derivativo (Revisada e Robustecida)]**
+Nesta etapa, implemente o algoritmo de controle PID em um módulo C desacoplado com proteções avançadas contra *Derivative Kick*, ruído de alta frequência, saturação de integrador e oscilações em repouso.
 
-**1. Requisitos do C++ (Lógica de Negócio - PID):**
+**1. Requisitos da Lógica do PID (`pid_controller.h` / `pid_controller.c`):**
 
-* **Classe `PIDController`:** Crie os arquivos `.h` e `.cpp` na pasta `main/`.
-* **Parâmetros de Inicialização:** O construtor (ou método `init`) deve receber os ganhos `Kp`, `Ki`, `Kd`, além dos limites de saída (`output_min` e `output_max`, que para este sistema representarão o esforço do motor de -100.0 a 100.0).
-* **Cálculo (Método `compute`):**
-* Deve receber o `setpoint` (posição desejada em mm), `current_value` (posição atual em mm) e o `dt` (delta de tempo em segundos).
-* Deve calcular o Erro, o termo Proporcional, o termo Integral (acumulando o erro no tempo) e o termo Derivativo (taxa de variação do erro).
-
-
-* **Anti-Windup:** É obrigatório implementar proteção contra saturação do termo integral. Se a saída calculada atingir `output_min` ou `output_max`, o acumulador integral deve parar de crescer na direção da saturação.
-* **Retorno:** O método deve retornar o sinal de controle saturado dentro dos limites operacionais.
+* **Estruturas de Configuração e Contexto:**
+  * Define `pid_config_t`: ganhos `kp`, `ki`, `kd`, limites de saída (`output_min` = -100.0f, `output_max` = 100.0f), banda morta de posição (`deadband_mm` = 0.05f) e fator de filtro derivativo (`alpha_d` = 0.15f).
+  * Define `pid_controller_t`: guarda acumulador integral, última posição medida, último termo derivativo filtrado e parâmetros de configuração.
+* **Cálculo da Ação Derivativa (*Derivative on Measurement*):**
+  * O termo derivativo DEVE ser calculado sobre a **variação da posição medida** ($x$), e NÃO sobre a variação do erro ($e$):
+    $$D_{\text{raw}} = -K_d \cdot \frac{\text{current\_position} - \text{prev\_position}}{\Delta t}$$
+  * Esta abordagem previne o **"Derivative Kick"** (pico de esforço instantâneo) em degraus de `setpoint`.
+* **Filtro Passa-Baixas no Termo Derivativo (*Derivative Noise Filter*):**
+  * Aplicar filtro IIR de 1ª ordem para suprimir ruídos de quantização do encoder:
+    $$D_{\text{filtered}} = \alpha_d \cdot D_{\text{raw}} + (1 - \alpha_d) \cdot D_{\text{prev}}$$
+* **Anti-Windup Condicional Inteligente:**
+  * O termo integral acumula $I = I + K_i \cdot e \cdot \Delta t$.
+  * Se a saída não saturada $u = P + I + D$ ultrapassar `output_max` ou `output_min` **E** o erro atual tiver o mesmo sinal da saturação, o acumulador integral DEVE ser congelado (não acumular). Se o erro inverter de sinal, a integração é liberada imediatamente.
+* **Zona Morta de Posição (*In-Position Deadband*):**
+  * Se $|e(t)| \le \text{deadband\_mm}$, o esforço final retornado DEVE ser $0.0\%$, evitando trepidação/zumbido do motor CC quando a guia estiver na posição desejada.
+* **Guarda Numérica & Reset:**
+  * Se `dt <= 0.0001f`, a atualização derivativa DEVE ser ignorada (evita divisão por zero).
+  * Se `setpoint` ou `current_position` for `NaN`/`INF`, a saída DEVE ser zerada ($0.0\%$).
+  * Fornecer função `pid_reset(pid_controller_t *pid)` para limpar integradores e histórico.
 
 **2. Requisitos do Teste Unitário (Python):**
 
 * No diretório `tests/`, crie o arquivo `test_pid_controller.py`.
-* **Cenário de Teste 1 (Ação Proporcional):** Zere os ganhos Ki e Kd. Injete um erro constante positivo. Valide se a saída do controlador corresponde exatamente a `Kp * erro`.
-* **Cenário de Teste 2 (Anti-Windup):** Configure um ganho Ki alto. Injete um erro constante por várias iterações simuladas para forçar o limite máximo de saída (100.0). Em seguida, inverta o sinal do erro (erro negativo). O teste deve provar que a saída do controlador reage imediatamente para diminuir o esforço, confirmando que o termo integral não acumulou desnecessariamente (*windup*).
+* **Cenário de Teste 1 (Ação Proporcional):** Com Ki=0 e Kd=0, valide se a saída é exatamente $K_p \cdot e$.
+* **Cenário de Teste 2 (Anti-Windup):** Force saturação em $+100.0\%$ com Ki alto. Invertendo o sinal do erro, confirme que a saída diminui instantaneamente sem atraso de windup.
+* **Cenário de Teste 3 (Prevenção de Derivative Kick):** Aplique um degrau no `setpoint` de $0\text{ mm}$ para $100\text{ mm}$ mantendo a posição constante. Confirme que o termo derivativo permanece zerado (sem impulso derivativo).
+* **Cenário de Teste 4 (Deadband de Posição):** Injete erro menor que `deadband_mm` ($0.03\text{ mm} < 0.05\text{ mm}$) e afirme (*assert*) que a saída é $0.0\%$.
+* **Cenário de Teste 5 (Proteção Numérica):** Teste chamada com `dt = 0.0` e valores `NaN` / `INF`.
 
-Gere a atualização da árvore de arquivos, os códigos C++ da classe `PIDController` e o script de teste em Python. Não altere o `main.cpp` nesta etapa.
+Gere os códigos C do módulo `pid_controller` e o script de teste em Python. Não altere o `main.c` nesta etapa.
