@@ -1,9 +1,16 @@
 #include "gpio_safety.h"
+#include <stddef.h>
+
+#ifndef HOST_TEST
 #include "driver/gpio.h"
 #include "esp_attr.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#else
+#define IRAM_ATTR
+static int s_simulated_emergency_gpio = 1;
+#endif
 
 static TaskHandle_t s_control_task_handle = NULL;
 
@@ -15,21 +22,27 @@ void gpio_safety_set_control_task_handle(TaskHandle_t task_handle) {
 static void IRAM_ATTR gpio12_emergency_isr(void *arg) {
     (void)arg;
 
+#ifndef HOST_TEST
     // 1. Immediate Physical Hardware Cutoff (Disable motor enable / PWM outputs)
-    // GPIO_NUM_13, GPIO_NUM_14 or driver enable pins forced LOW
     gpio_set_level(GPIO_NUM_13, 0);
+#else
+    s_simulated_emergency_gpio = 0;
+#endif
 
     // 2. Atomic state transition to EMERGENCY (No mutex lock inside ISR)
     shared_data_set_state_atomic(MACHINE_STATE_EMERGENCY);
 
+#ifndef HOST_TEST
     // 3. Notify Core 1 Control Task immediately
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     if (s_control_task_handle != NULL) {
         vTaskNotifyGiveFromISR(s_control_task_handle, &xHigherPriorityTaskWoken);
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
+#endif
 }
 
+#ifndef HOST_TEST
 // Core 0 Task to monitor GPIO 11 (Start Button) with software debounce
 static void start_button_debounce_task(void *pvParameters) {
     (void)pvParameters;
@@ -60,8 +73,10 @@ static void start_button_debounce_task(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
+#endif
 
 esp_err_t gpio_safety_init(void) {
+#ifndef HOST_TEST
     // 1. Configure GPIO 11 (Start Button) - Input with Internal Pull-up
     gpio_config_t io_conf_start = {
         .pin_bit_mask = (1ULL << GPIO_START_PIN),
@@ -110,10 +125,23 @@ esp_err_t gpio_safety_init(void) {
         NULL,
         0 // Core 0
     );
-
+#else
+    s_simulated_emergency_gpio = 1;
+#endif
     return ESP_OK;
 }
 
 void gpio_safety_trigger_emergency_software(void) {
     gpio12_emergency_isr(NULL);
+}
+
+bool gpio_safety_is_emergency_active(void) {
+    if (shared_data_get_state() == MACHINE_STATE_EMERGENCY) {
+        return true;
+    }
+#ifndef HOST_TEST
+    return (gpio_get_level(GPIO_EMERGENCY_PIN) == 0);
+#else
+    return (s_simulated_emergency_gpio == 0);
+#endif
 }

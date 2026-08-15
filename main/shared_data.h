@@ -9,10 +9,18 @@
 #include "freertos/semphr.h"
 #include "driver/gpio.h"
 #else
+#include <stddef.h>
 typedef uint32_t TickType_t;
 typedef void* SemaphoreHandle_t;
+#define pdTRUE true
+#define pdFALSE false
+#define pdMS_TO_TICKS(ms) ((TickType_t)(ms))
 #define GPIO_NUM_12 12
 #define GPIO_NUM_11 11
+static inline SemaphoreHandle_t xSemaphoreCreateMutex(void) { static int dummy = 1; return (void*)&dummy; }
+static inline bool xSemaphoreTake(SemaphoreHandle_t mutex, TickType_t ticks) { (void)mutex; (void)ticks; return true; }
+static inline void xSemaphoreGive(SemaphoreHandle_t mutex) { (void)mutex; }
+int gpio_get_level(int pin);
 #endif
 
 #ifdef __cplusplus

@@ -1,7 +1,16 @@
 #include "shared_data.h"
+#include <stddef.h>
+#ifndef HOST_TEST
 #include "esp_log.h"
+#else
+static int s_host_simulated_gpio_level = 1;
+int gpio_get_level(int pin) {
+    (void)pin;
+    return s_host_simulated_gpio_level;
+}
+#endif
 
-static atomic_uint_fast16_t s_atomic_machine_state = ATOMIC_VAR_INIT(MACHINE_STATE_IDLE);
+static _Atomic uint_fast16_t s_atomic_machine_state = MACHINE_STATE_IDLE;
 
 SystemData g_system_data = {
     .position_setpoint = 0.0f,

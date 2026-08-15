@@ -2,6 +2,8 @@
 #include "shared_data.h"
 #include "gpio_safety.h"
 #include <string.h>
+
+#ifndef HOST_TEST
 #include "esp_log.h"
 #include "driver/uart.h"
 #include "mbcontroller.h"
@@ -9,6 +11,7 @@
 #define MB_SLAVE_ADDR 1
 #define MB_PORT_NUM UART_NUM_0
 #define MB_DEV_SPEED 115200
+#endif
 
 // Internal buffers mapped to Modbus stack
 static holding_reg_params_t s_holding_reg = {0, 0, 0};
@@ -33,6 +36,7 @@ static float registers_to_float(uint16_t hi, uint16_t lo) {
 }
 
 esp_err_t modbus_slave_init(void) {
+#ifndef HOST_TEST
     // 1. Suppress plain ASCII logging on UART0 to avoid polluting Modbus RTU frames
     esp_log_level_set("*", ESP_LOG_NONE);
 
@@ -75,8 +79,12 @@ esp_err_t modbus_slave_init(void) {
     // 5. Start Modbus slave
     err = mbc_slave_start(s_mbc_handle);
     return err;
+#else
+    return ESP_OK;
+#endif
 }
 
+#ifndef HOST_TEST
 static void modbus_slave_task(void *pvParameters) {
     (void)pvParameters;
 
@@ -116,8 +124,10 @@ static void modbus_slave_task(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
+#endif
 
 void modbus_slave_start_task(void) {
+#ifndef HOST_TEST
     xTaskCreatePinnedToCore(
         modbus_slave_task,
         "ModbusSlaveTask",
@@ -127,4 +137,5 @@ void modbus_slave_start_task(void) {
         NULL,
         0 // Core 0
     );
+#endif
 }
