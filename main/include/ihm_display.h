@@ -13,7 +13,7 @@ extern "C" {
 #define IHM_DEFAULT_SCL_GPIO    2
 #define IHM_DEFAULT_LED_GPIO    7
 #define IHM_DEFAULT_I2C_ADDR    0x27
-#define IHM_DEFAULT_I2C_FREQ    100000
+#define IHM_DEFAULT_I2C_FREQ    50000
 
 typedef struct {
     int sda_gpio;
@@ -29,6 +29,9 @@ typedef struct {
     bool led_state;
     uint32_t last_led_toggle_ms;
     uint32_t last_reconnect_attempt_ms;
+    uint32_t last_lcd_update_ms;
+    char last_line1[17];
+    char last_line2[17];
 #ifndef HOST_TEST
     void *i2c_bus_handle;
     void *i2c_dev_handle;

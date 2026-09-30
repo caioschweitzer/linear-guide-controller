@@ -4,6 +4,7 @@
 
 #ifndef HOST_TEST
 #include "esp_log.h"
+#include "esp_rom_sys.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -139,7 +140,9 @@ esp_err_t motor_set_effort(motor_driver_t *driver, float effort_percent) {
     // Shoot-through / Back-EMF Direction Reversal Protection
     if (driver->last_direction != 0 && target_dir != 0 && driver->last_direction != target_dir) {
         motor_brake(driver);
-        vTaskDelay(pdMS_TO_TICKS(1)); // Brief 1ms brake transition
+#ifndef HOST_TEST
+        esp_rom_delay_us(100); // Brief 100 us microsecond brake transition
+#endif
     }
 
     float abs_effort = fabsf(effort_percent);

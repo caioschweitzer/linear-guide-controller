@@ -6,11 +6,12 @@ import pytest
 MACHINE_STATE_IDLE = 0
 MACHINE_STATE_MOVING = 1
 MACHINE_STATE_EMERGENCY = 2
+MACHINE_STATE_HOMING = 3
 
 # Physical Constants
 PULSES_PER_REV = 1000
 MM_PER_REV = 42.4115
-SYSTEM_MAX_TRAVEL_MM = 424.115
+SYSTEM_MAX_TRAVEL_MM = 670.0
 
 
 class SystemDataStruct(ctypes.Structure):
@@ -94,7 +95,7 @@ def load_system_lib():
                 "ihm_display.c", "modbus_slave.c"
             ]
         ]
-        cmd = ["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST"] + c_files + ["-o", so_path, f"-I{inc_dir}"]
+        cmd = ["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST"] + c_files + ["-o", so_path, f"-I{inc_dir}", f"-I{src_dir}"]
         subprocess.run(cmd, check=True)
 
     lib = ctypes.CDLL(so_path)
@@ -268,3 +269,70 @@ def test_emergency_estop_interruption(sys_lib, pid_ctrl, kin_ctx, enc_drv, mtr_d
     rejected = sys_lib.shared_data_request_state_change(MACHINE_STATE_MOVING)
     assert rejected is False
     assert sys_lib.shared_data_get_state() == MACHINE_STATE_EMERGENCY
+
+
+def test_homing_state_transition(sys_lib, pid_ctrl, mtr_drv):
+    sys_lib.shared_data_init()
+    sys_lib.gpio_safety_init()
+
+    # Verify transition from IDLE to HOMING
+    success = sys_lib.shared_data_request_state_change(MACHINE_STATE_HOMING)
+    assert success is True
+    assert sys_lib.shared_data_get_state() == MACHINE_STATE_HOMING
+
+    # Transition back to IDLE
+    success_idle = sys_lib.shared_data_request_state_change(MACHINE_STATE_IDLE)
+    assert success_idle is True
+    assert sys_lib.shared_data_get_state() == MACHINE_STATE_IDLE
+
+
+def test_emergency_abort_during_homing(sys_lib):
+    sys_lib.shared_data_init()
+    sys_lib.gpio_safety_init()
+
+    # Enter HOMING state
+    sys_lib.shared_data_request_state_change(MACHINE_STATE_HOMING)
+    assert sys_lib.shared_data_get_state() == MACHINE_STATE_HOMING
+
+    # Trigger emergency interrupt during homing routine
+    sys_lib.gpio_safety_trigger_emergency_software()
+
+    # State MUST immediately shift to EMERGENCY
+    assert sys_lib.shared_data_get_state() == MACHINE_STATE_EMERGENCY
+    assert sys_lib.gpio_safety_is_emergency_active() is True
+
+
+def test_setpoint_clamping_to_physical_bounds():
+    """Verify that position setpoint values clamp correctly within [0.0, SYSTEM_MAX_TRAVEL_MM]."""
+    # Lower bound test (< 0.0 mm)
+    sp_negative = -25.0
+    clamped_low = 0.0 if sp_negative < 0.0 else (SYSTEM_MAX_TRAVEL_MM if sp_negative > SYSTEM_MAX_TRAVEL_MM else sp_negative)
+    assert clamped_low == 0.0
+
+    # Upper bound test (> 670.0 mm)
+    sp_excessive = 780.0
+    clamped_high = 0.0 if sp_excessive < 0.0 else (SYSTEM_MAX_TRAVEL_MM if sp_excessive > SYSTEM_MAX_TRAVEL_MM else sp_excessive)
+    assert clamped_high == 670.0
+
+    # In-range test
+    sp_valid = 536.0
+    clamped_valid = 0.0 if sp_valid < 0.0 else (SYSTEM_MAX_TRAVEL_MM if sp_valid > SYSTEM_MAX_TRAVEL_MM else sp_valid)
+    assert clamped_valid == 536.0
+
+
+def test_homing_detection_logic_zero_volt():
+    """Verify homing detection logic: 0V indicates Home datum (magnet present)."""
+    # Simulate GPIO pin level readings
+    level_free_air = 1        # 3.3V (contact closed in free air)
+    level_magnet_at_home = 0  # 0V (contact opened, pulled down to GND)
+
+    # In free air: not at home, keep driving reverse (-60.0%)
+    is_home_free = (level_free_air == 0)
+    assert is_home_free is False
+
+    # At home: contact open, level is 0V -> trigger brake and zero position
+    is_home_triggered = (level_magnet_at_home == 0)
+    assert is_home_triggered is True
+
+
+

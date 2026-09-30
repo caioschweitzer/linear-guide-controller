@@ -15,9 +15,10 @@ def load_encoder_lib():
     so_path = os.path.join(os.path.dirname(__file__), "libencoder_pcnt.so")
     if not os.path.exists(so_path):
         import subprocess
-        src = os.path.join(os.path.dirname(__file__), "..", "main", "encoder_pcnt.c")
-        inc = os.path.join(os.path.dirname(__file__), "..", "main")
-        subprocess.run(["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST", src, "-o", so_path, f"-I{inc}"], check=True)
+        src = os.path.join(os.path.dirname(__file__), "..", "main", "src", "encoder_pcnt.c")
+        inc1 = os.path.join(os.path.dirname(__file__), "..", "main", "include")
+        inc2 = os.path.join(os.path.dirname(__file__), "..", "main", "src")
+        subprocess.run(["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST", src, "-o", so_path, f"-I{inc1}", f"-I{inc2}"], check=True)
 
     lib = ctypes.CDLL(so_path)
 

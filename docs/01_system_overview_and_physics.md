@@ -7,7 +7,7 @@ The ESP32-S3 Linear Actuator Controller is an industrial embedded positioning sy
 Linear actuators driven by DC motors paired with optical quadrature encoders present several classic control engineering challenges:
 1. **Kinematic Scale Conversion**: High-frequency quadrature pulse counting must be mapped continuously and deterministically into real-world physical displacement (millimeters).
 2. **Velocity Estimation & Noise Filtering**: Numerical differentiation of discrete position ticks introduces high-frequency derivative noise. Exponential Moving Average (EMA) filtering is required to yield clean velocity feedback for the PID controller.
-3. **Overrun & Mechanical Safety**: Physical hard stops at $L_{\text{max}} = 424.115\text{ mm}$ must be protected against via software deadbands, software emergency lockouts, and hardware-level power cutoffs.
+3. **Overrun & Mechanical Safety**: Physical hard stops at $L_{\text{max}} = 670.0\text{ mm}$ (from Home sensor to first endstop FC0) must be protected against via software deadbands, software emergency lockouts, and hardware-level power cutoffs.
 
 ---
 
@@ -20,7 +20,7 @@ The system is calibrated around a lead-screw linear guide driven by a DC motor e
 | Mechanical Property | Symbol | Numerical Value | Physical Unit |
 | :--- | :--- | :--- | :--- |
 | Lead Screw Pitch | $P$ | `42.4115` | mm / revolution |
-| Maximum Linear Travel | $L_{\text{max}}$ | `424.115` | mm |
+| Maximum Linear Travel | $L_{\text{max}}$ | `670.0` | mm |
 | Encoder Resolution | $N$ | `1000` | Pulses Per Rev (PPR) |
 | Encoder Quadrature Multiplier | $Q$ | `4` | Edges per pulse (x4 mode) |
 | Effective Edges per Rev | $N_{\text{quad}}$ | `4000` | Counts / revolution |

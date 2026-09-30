@@ -1,168 +1,124 @@
+"""
+test_state_machine.py — State-machine transition HIL tests over Modbus TCP.
+
+Requires a live ESP32 running the Modbus TCP slave on MODBUS_HOST:MODBUS_PORT.
+All tests are automatically skipped when no hardware target is reachable.
+
+Tests the legal state transitions of the safety state machine:
+    IDLE → MOVING → EMERGENCY → IDLE (via RESET)
+
+Environment variables (see conftest.py / pytest.ini):
+    MODBUS_HOST  – ESP32 IP address (default: 192.168.1.100)
+    MODBUS_PORT  – TCP port         (default: 502)
+"""
+
 import os
 import time
 import signal
 import contextlib
 import pytest
 
-try:
-    from pymodbus.client import ModbusSerialClient
-except ImportError:
-    from pymodbus.client.sync import ModbusSerialClient
-
-import serial.tools.list_ports
-
+# Per-test timeout enforced by pytest-timeout plugin
 pytestmark = pytest.mark.timeout(3)
 
-MODBUS_TIMEOUT = float(os.getenv("MODBUS_TIMEOUT", "0.5"))
-MODBUS_RETRIES = int(os.getenv("MODBUS_RETRIES", "1"))
 TEST_TIMEOUT_SEC = int(os.getenv("TEST_TIMEOUT", "3"))
-BAUDRATE = 115200
 SLAVE_ID = 1
 
-# Command Register Flags
-CMD_NONE = 0
-CMD_START = 1
-CMD_STOP = 2
-CMD_RESET = 3
+# ─── Command Register Flags ───────────────────────────────────────────────────
+CMD_NONE              = 0
+CMD_START             = 1
+CMD_STOP              = 2
+CMD_RESET             = 3
 CMD_SIMULATE_EMERGENCY = 99
 
-# State Register Values
-STATE_IDLE = 0
-STATE_MOVING = 1
+# ─── Machine State Values ─────────────────────────────────────────────────────
+STATE_IDLE      = 0
+STATE_MOVING    = 1
 STATE_EMERGENCY = 2
 
 
-class ModbusTimeoutGuardrailError(TimeoutError):
-    """Exception raised when a test execution exceeds the timeout guardrail."""
-    pass
-
+# ─── Timeout guardrail ────────────────────────────────────────────────────────
 
 @contextlib.contextmanager
 def timeout_guardrail(seconds: int):
-    """Signal-based execution guardrail to strictly enforce timeouts on Linux."""
-    def _handle_timeout(signum, frame):
-        raise ModbusTimeoutGuardrailError(f"Guardrail triggered: Test execution exceeded {seconds} second(s) limit")
+    """Signal-based guardrail to enforce hard deadlines on Linux."""
+    def _handler(signum, frame):
+        raise TimeoutError(f"Guardrail triggered: exceeded {seconds}s limit")
 
-    if hasattr(signal, 'SIGALRM'):
-        old_handler = signal.signal(signal.SIGALRM, _handle_timeout)
+    if hasattr(signal, "SIGALRM"):
+        old = signal.signal(signal.SIGALRM, _handler)
         signal.alarm(seconds)
         try:
             yield
         finally:
             signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
+            signal.signal(signal.SIGALRM, old)
     else:
         yield
 
 
-def auto_detect_esp32_port() -> str:
-    env_port = os.getenv("MODBUS_PORT")
-    if env_port:
-        return env_port
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-    ports = list(serial.tools.list_ports.comports())
-    if not ports:
-        return "/dev/ttyUSB0"
-
-    ESP_VIDS = {0x303a, 0x10c4, 0x1a86, 0x0403}
-    for p in ports:
-        if p.vid == 0x303a or (p.description and any(kw in p.description.lower() for kw in ["esp32", "espressif"])):
-            return p.device
-    for p in ports:
-        if p.vid in ESP_VIDS:
-            return p.device
-    for p in ports:
-        if "ttyACM" in p.device or "ttyUSB" in p.device:
-            return p.device
-
-    return ports[0].device
-
-
-SERIAL_PORT = auto_detect_esp32_port()
-
-
-@pytest.fixture(scope="module")
-def modbus_client():
-    client = ModbusSerialClient(
-        port=SERIAL_PORT,
-        baudrate=BAUDRATE,
-        parity='N',
-        stopbits=1,
-        bytesize=8,
-        timeout=MODBUS_TIMEOUT,
-        retries=MODBUS_RETRIES
-    )
-    with timeout_guardrail(TEST_TIMEOUT_SEC):
-        connected = False
-        try:
-            connected = client.connect()
-        except Exception as e:
-            pytest.fail(f"Serial port connection to {SERIAL_PORT} failed: {e}")
-
-        if not connected:
-            pytest.fail(f"Could not connect to serial port {SERIAL_PORT} (timeout: {MODBUS_TIMEOUT}s)")
-
-    yield client
-    client.close()
-
-
-def read_machine_state(client) -> int:
-    """Helper to read Input Register 0x0004 (State)."""
-    result = client.read_input_registers(0x0004, count=1, slave=SLAVE_ID)
-    assert not result.isError(), f"Failed to read machine state input register: {result}"
+def _read_machine_state(client) -> int:
+    """Read Input Register 0x0006 (machine_state uint16)."""
+    result = client.read_input_registers(0x0006, count=1, slave=SLAVE_ID)
+    assert not result.isError(), f"read_input_registers (state) failed: {result}"
     return result.registers[0]
 
 
-def send_modbus_command(client, command_val: int):
-    """Helper to write Command to Holding Register 0x0002."""
+def _send_command(client, command_val: int):
+    """Write command uint16 to Holding Register 0x0002."""
     result = client.write_registers(0x0002, [command_val], slave=SLAVE_ID)
-    assert not result.isError(), f"Failed to send command {command_val}: {result}"
+    assert not result.isError(), f"write_registers (cmd={command_val}) failed: {result}"
 
 
-def test_state_machine_normal_flow(modbus_client):
+# ─── HIL tests (require tcp_modbus_client from conftest.py) ──────────────────
+
+def test_state_machine_normal_flow(tcp_modbus_client):
+    """IDLE → START → MOVING: verify legal forward transition."""
     with timeout_guardrail(TEST_TIMEOUT_SEC):
-        # 1. Reset state to IDLE first if needed
-        send_modbus_command(modbus_client, CMD_RESET)
+        # Reset to IDLE first in case a prior test left the machine in another state
+        _send_command(tcp_modbus_client, CMD_RESET)
         time.sleep(0.05)
 
-        # 2. Check initial state is IDLE (0)
-        current_state = read_machine_state(modbus_client)
-        assert current_state == STATE_IDLE, f"Expected state IDLE (0), got {current_state}"
+        state = _read_machine_state(tcp_modbus_client)
+        assert state == STATE_IDLE, f"Expected IDLE (0) after RESET, got {state}"
 
-        # 3. Send START command (1)
-        send_modbus_command(modbus_client, CMD_START)
+        _send_command(tcp_modbus_client, CMD_START)
         time.sleep(0.05)
 
-        # 4. Verify transition to MOVING (1)
-        current_state = read_machine_state(modbus_client)
-        assert current_state == STATE_MOVING, f"Expected state MOVING (1), got {current_state}"
+        state = _read_machine_state(tcp_modbus_client)
+        assert state == STATE_MOVING, f"Expected MOVING (1) after START, got {state}"
 
 
-def test_state_machine_emergency_lockout_rejection(modbus_client):
+def test_state_machine_emergency_lockout_rejection(tcp_modbus_client):
+    """EMERGENCY state must reject all START commands (safety interlock)."""
     with timeout_guardrail(TEST_TIMEOUT_SEC):
-        # 1. Trigger simulated Emergency (99)
-        send_modbus_command(modbus_client, CMD_SIMULATE_EMERGENCY)
+        _send_command(tcp_modbus_client, CMD_SIMULATE_EMERGENCY)
         time.sleep(0.05)
 
-        # 2. Confirm state is EMERGENCY (2)
-        current_state = read_machine_state(modbus_client)
-        assert current_state == STATE_EMERGENCY, f"Expected state EMERGENCY (2), got {current_state}"
+        state = _read_machine_state(tcp_modbus_client)
+        assert state == STATE_EMERGENCY, f"Expected EMERGENCY (2) after simulate, got {state}"
 
-        # 3. Attempt invalid transition to MOVING (1) while in EMERGENCY
-        send_modbus_command(modbus_client, CMD_START)
+        # Attempt to illegally transition to MOVING while in EMERGENCY
+        _send_command(tcp_modbus_client, CMD_START)
         time.sleep(0.05)
 
-        # 4. Confirm transition was REJECTED and state remains EMERGENCY (2)
-        current_state = read_machine_state(modbus_client)
-        assert current_state == STATE_EMERGENCY, f"Expected state to remain EMERGENCY (2), got {current_state}"
+        state = _read_machine_state(tcp_modbus_client)
+        assert state == STATE_EMERGENCY, (
+            f"EMERGENCY lockout violated — START was accepted, state={state}"
+        )
 
 
-def test_state_machine_safe_reset(modbus_client):
+def test_state_machine_safe_reset(tcp_modbus_client):
+    """RESET command must return the machine from EMERGENCY back to IDLE."""
     with timeout_guardrail(TEST_TIMEOUT_SEC):
-        # 1. Send RESET command (3)
-        send_modbus_command(modbus_client, CMD_RESET)
+        # Ensure we are in EMERGENCY first (may already be from previous test)
+        _send_command(tcp_modbus_client, CMD_SIMULATE_EMERGENCY)
         time.sleep(0.05)
 
-        # 2. Confirm transition back to IDLE (0)
-        current_state = read_machine_state(modbus_client)
-        assert current_state == STATE_IDLE, f"Expected state IDLE (0) after RESET, got {current_state}"
+        _send_command(tcp_modbus_client, CMD_RESET)
+        time.sleep(0.05)
+
+        state = _read_machine_state(tcp_modbus_client)
+        assert state == STATE_IDLE, f"Expected IDLE (0) after RESET, got {state}"

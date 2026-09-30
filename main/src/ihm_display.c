@@ -12,6 +12,9 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "IHM_DISPLAY";
 #endif
@@ -24,6 +27,10 @@ const char *ihm_state_to_str(machine_state_t state) {
     return "MOVING";
   case MACHINE_STATE_EMERGENCY:
     return "EMERG ";
+  case MACHINE_STATE_HOMING:
+    return "HOMING";
+  case MACHINE_STATE_OPEN_LOOP_TEST:
+    return "OPNLP ";
   default:
     return "UNK   ";
   }
@@ -82,6 +89,22 @@ bool ihm_update_led(ihm_display_t *ihm, machine_state_t state,
     }
     break;
 
+  case MACHINE_STATE_HOMING:
+    // 2 Hz blink (250 ms toggle interval) for Homing calibration
+    if (current_time_ms - ihm->last_led_toggle_ms >= 250) {
+      ihm->led_state = !ihm->led_state;
+      ihm->last_led_toggle_ms = current_time_ms;
+    }
+    break;
+
+  case MACHINE_STATE_OPEN_LOOP_TEST:
+    // 4 Hz blink (125 ms toggle interval) during open loop burst test
+    if (current_time_ms - ihm->last_led_toggle_ms >= 125) {
+      ihm->led_state = !ihm->led_state;
+      ihm->last_led_toggle_ms = current_time_ms;
+    }
+    break;
+
   default:
     ihm->led_state = false;
     break;
@@ -104,7 +127,9 @@ static esp_err_t pcf8574_write_byte(ihm_display_t *ihm, uint8_t data) {
 
 static void lcd_strobe(ihm_display_t *ihm, uint8_t data) {
   pcf8574_write_byte(ihm, data | LCD_EN);
+  esp_rom_delay_us(10); // Enforce EN pulse width (> 450 ns HD44780 requirement)
   pcf8574_write_byte(ihm, data & ~LCD_EN);
+  esp_rom_delay_us(50); // Enforce data hold & execution time (> 37 us HD44780 spec)
 }
 
 static void lcd_write_nibble(ihm_display_t *ihm, uint8_t nibble, uint8_t rs) {
@@ -116,6 +141,9 @@ static void lcd_write_nibble(ihm_display_t *ihm, uint8_t nibble, uint8_t rs) {
 static void lcd_send_cmd(ihm_display_t *ihm, uint8_t cmd) {
   lcd_write_nibble(ihm, cmd & 0xF0, 0);
   lcd_write_nibble(ihm, (cmd << 4) & 0xF0, 0);
+  if (cmd == 0x01 || cmd == 0x02) {
+    vTaskDelay(pdMS_TO_TICKS(3)); // Clear display / Return home require > 1.52 ms
+  }
 }
 
 static void lcd_send_data(ihm_display_t *ihm, uint8_t data) {
@@ -142,6 +170,9 @@ void ihm_init(ihm_display_t *ihm, const ihm_config_t *config) {
   ihm->led_state = false;
   ihm->last_led_toggle_ms = 0;
   ihm->last_reconnect_attempt_ms = 0;
+  ihm->last_lcd_update_ms = 0;
+  ihm->last_line1[0] = '\0';
+  ihm->last_line2[0] = '\0';
 
 #ifndef HOST_TEST
   // Configure GPIO LED Pin
@@ -180,15 +211,22 @@ void ihm_init(ihm_display_t *ihm, const ihm_config_t *config) {
         ESP_OK) {
       ihm->i2c_dev_handle = (void *)dev_handle;
 
+      esp_rom_delay_us(50000); // HD44780 Power-On Initialization delay (> 15 ms)
+
       // Initialize LCD in 4-bit mode (HD44780 init sequence)
       lcd_write_nibble(ihm, 0x30, 0);
+      esp_rom_delay_us(5000); // > 4.1 ms delay
       lcd_write_nibble(ihm, 0x30, 0);
+      esp_rom_delay_us(150);
       lcd_write_nibble(ihm, 0x30, 0);
+      esp_rom_delay_us(150);
       lcd_write_nibble(ihm, 0x20, 0); // Set 4-bit mode
+      esp_rom_delay_us(150);
 
       lcd_send_cmd(ihm, 0x28); // 2 lines, 5x8 font
       lcd_send_cmd(ihm, 0x0C); // Display ON, Cursor OFF
       lcd_send_cmd(ihm, 0x01); // Clear Display
+      esp_rom_delay_us(3000);
       lcd_send_cmd(ihm, 0x06); // Entry Mode Set
 
       ihm->is_connected = true;
@@ -236,5 +274,11 @@ void ihm_update(ihm_display_t *ihm, float position_mm, float velocity_mm_s,
 
   ihm_format_lines(position_mm, velocity_mm_s, state, line1, line2);
   ihm_update_led(ihm, state, current_time_ms);
-  ihm_write_lcd(ihm, line1, line2);
+
+  // Update display at smooth 2 Hz (500 ms period)
+  if (current_time_ms - ihm->last_lcd_update_ms >= 500) {
+    if (ihm_write_lcd(ihm, line1, line2)) {
+      ihm->last_lcd_update_ms = current_time_ms;
+    }
+  }
 }

@@ -1,5 +1,7 @@
 #include "shared_data.h"
+#include "gpio_safety.h"
 #include <stddef.h>
+#include <math.h>
 #ifndef HOST_TEST
 #include "esp_log.h"
 #else
@@ -27,12 +29,17 @@ SystemData g_system_data = {
 };
 
 SemaphoreHandle_t g_system_mutex = NULL;
+burst_buffer_t g_burst_buffer = {0};
 
 void shared_data_init(void) {
     if (g_system_mutex == NULL) {
         g_system_mutex = xSemaphoreCreateMutex();
     }
     atomic_store(&s_atomic_machine_state, (uint_fast16_t)MACHINE_STATE_IDLE);
+
+    g_burst_buffer.sample_count = 0;
+    g_burst_buffer.status = BURST_STATUS_IDLE;
+    g_burst_buffer.read_index = 0;
 
     if (shared_data_lock(pdMS_TO_TICKS(10))) {
         g_system_data.position_setpoint = 0.0f;
@@ -76,17 +83,35 @@ void shared_data_set_state_atomic(machine_state_t state) {
 bool shared_data_request_state_change(machine_state_t new_state) {
     machine_state_t current = shared_data_get_state();
 
+#ifdef HOST_TEST
+    if (new_state == MACHINE_STATE_IDLE) {
+        gpio_safety_reset_simulation();
+    }
+#endif
+
     // Check emergency hardware pin level (GPIO 12: active low, 1 == SAFE/unpressed, 0 == PRESSED)
     int emergency_pin_level = gpio_get_level(GPIO_EMERGENCY_PIN);
 
     // Rule 1: Transitioning to EMERGENCY is always granted immediately
     if (new_state == MACHINE_STATE_EMERGENCY) {
+#ifndef HOST_TEST
+        gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 0);
+#endif
+        if (current == MACHINE_STATE_OPEN_LOOP_TEST) {
+            g_burst_buffer.status = BURST_STATUS_ABORTED;
+        }
         shared_data_set_state_atomic(MACHINE_STATE_EMERGENCY);
         return true;
     }
 
     // Rule 2: If emergency pin is physically pressed (LOW == 0), no transition to IDLE or MOVING is permitted
     if (emergency_pin_level == 0) {
+#ifndef HOST_TEST
+        gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 0);
+#endif
+        if (current == MACHINE_STATE_OPEN_LOOP_TEST) {
+            g_burst_buffer.status = BURST_STATUS_ABORTED;
+        }
         shared_data_set_state_atomic(MACHINE_STATE_EMERGENCY);
         return false;
     }
@@ -94,16 +119,54 @@ bool shared_data_request_state_change(machine_state_t new_state) {
     // Rule 3: Moving requires current state == IDLE
     if (new_state == MACHINE_STATE_MOVING) {
         if (current == MACHINE_STATE_IDLE && emergency_pin_level == 1) {
+#ifndef HOST_TEST
+            gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
+#endif
             shared_data_set_state_atomic(MACHINE_STATE_MOVING);
             return true;
         }
         return false;
     }
 
-    // Rule 4: Reset (EMERGENCY -> IDLE) requires emergency_pin_level == 1 (HIGH)
+    // Rule 4: Reset (EMERGENCY or OPEN_LOOP_TEST -> IDLE) requires emergency_pin_level == 1 (HIGH)
     if (new_state == MACHINE_STATE_IDLE) {
         if (emergency_pin_level == 1) {
+#ifndef HOST_TEST
+            gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
+#endif
             shared_data_set_state_atomic(MACHINE_STATE_IDLE);
+            return true;
+        }
+        return false;
+    }
+
+    // Rule 5: Homing requires emergency_pin_level == 1 (HIGH) and current == IDLE
+    if (new_state == MACHINE_STATE_HOMING) {
+        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 1) {
+#ifndef HOST_TEST
+            gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
+#endif
+            shared_data_set_state_atomic(MACHINE_STATE_HOMING);
+            return true;
+        }
+        return false;
+    }
+
+    // Rule 6: Open-Loop Test requires current == IDLE, emergency_pin_level == 1, and |pos| <= 5.0 mm
+    if (new_state == MACHINE_STATE_OPEN_LOOP_TEST) {
+        float current_pos = 0.0f;
+        if (shared_data_lock(pdMS_TO_TICKS(5))) {
+            current_pos = g_system_data.current_position;
+            shared_data_unlock();
+        }
+        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 1 && fabsf(current_pos) <= 5.0f) {
+#ifndef HOST_TEST
+            gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
+#endif
+            g_burst_buffer.sample_count = 0;
+            g_burst_buffer.status = BURST_STATUS_CAPTURING;
+            g_burst_buffer.read_index = 0;
+            shared_data_set_state_atomic(MACHINE_STATE_OPEN_LOOP_TEST);
             return true;
         }
         return false;

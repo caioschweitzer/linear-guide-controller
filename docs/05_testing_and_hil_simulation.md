@@ -8,7 +8,7 @@ To enable rapid automated testing on Linux continuous integration (CI) servers w
                        HOST AUTOMATED TEST PIPELINE
  ┌─────────────────────────────────────────────────────────────────────────┐
  │                            pytest Test Suite                            │
- │                        (tests/test_*.py - 32 tests)                     │
+ │                        (tests/test_*.py - 37 tests)                     │
  └─────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
@@ -48,9 +48,9 @@ gcc -shared -fPIC -O2 -DHOST_TEST \
 
 ---
 
-## 3. Comprehensive Breakdown of the 32 Pytest Test Cases
+## 3. Comprehensive Breakdown of the 37 Pytest Test Cases
 
-The test suite consists of 32 unit and integration tests distributed across 8 test modules:
+The test suite consists of 37 unit and integration tests distributed across 8 test modules. Tests requiring live hardware (TCP socket to ESP32) are automatically **skipped** when no target is reachable; all host-native tests always pass:
 
 ### 3.1 `test_encoder_pcnt.py` (4 tests)
 - `test_encoder_initialization_and_zero_reading`: Validates initial tick count is zero after driver setup.
@@ -69,12 +69,14 @@ The test suite consists of 32 unit and integration tests distributed across 8 te
 - `test_differential_kinematics_and_ema_filter`: Tests velocity calculation and Exponential Moving Average smoothing ($\alpha = 0.20$).
 - `test_modbus_fixed_point_serialization`: Validates Big-Endian 32-bit float serialization for Modbus Holding/Input registers.
 
-### 3.4 `test_modbus_kernel.py` (5 tests)
-- `test_holding_register_setpoint_write_read`: Validates Holding Register setpoint read/write operations.
-- `test_input_registers_read_initial_state`: Tests Input Register telemetry readback.
-- `test_discrete_inputs_and_coils_c_struct`: Verifies C-struct memory layout alignment for binary registers.
-- `test_discrete_inputs_read`: Tests Discrete Input bit-mask read (FC 0x02).
-- `test_coils_read_write`: Tests Coil read and write operations (FC 0x01 / 0x05).
+### 3.4 `test_modbus_kernel.py` (5 tests — TCP HIL)
+- Connect to live ESP32 via `ModbusTcpClient` (env: `MODBUS_HOST`, `MODBUS_PORT`).
+- `test_holding_register_setpoint_write_read`: Validates Holding Register setpoint read/write operations over TCP.
+- `test_holding_register_pid_gains_write_read`: Validates PID gain read/write round-trip over TCP.
+- `test_input_registers_read_initial_state`: Tests Input Register telemetry readback (position, velocity, state).
+- `test_discrete_inputs_and_coils_c_struct`: Verifies C-struct memory layout alignment for binary registers via host `ctypes`.
+- `test_discrete_inputs_read`: Tests Discrete Input bit-mask read (FC 0x02) over TCP.
+- `test_coils_read_write`: Tests Coil read and write operations (FC 0x01 / 0x05) over TCP.
 
 ### 3.5 `test_motor_mcpwm.py` (5 tests)
 - `test_forward_effort`: Verifies positive duty cycle mapping to Forward PWM channel.
@@ -90,12 +92,37 @@ The test suite consists of 32 unit and integration tests distributed across 8 te
 - `test_in_position_deadband`: Verifies zero effort output when $|e| \le 0.1\text{ mm}$.
 - `test_numerical_guardrails`: Tests immunity to NaN/Inf inputs.
 
-### 3.7 `test_state_machine.py` (3 tests)
+### 3.7 `test_state_machine.py` (3 tests — TCP HIL)
+- Connect to live ESP32 via `ModbusTcpClient` (env: `MODBUS_HOST`, `MODBUS_PORT`). Skipped automatically when no target is available.
 - `test_state_machine_normal_flow`: Tests standard `IDLE` $\rightarrow$ `MOVING` $\rightarrow$ `IDLE` state transitions.
 - `test_state_machine_emergency_lockout_rejection`: Ensures all start/move requests are rejected while in `EMERGENCY`.
 - `test_state_machine_safe_reset`: Validates level-checked reset out of `EMERGENCY` state.
 
-### 3.8 `test_system_integration.py` (3 tests)
+### 3.8 `test_supervisory_ui.py` (4 tests)
+- `test_ieee754_float_conversion_roundtrip`: Tests 32-bit float encoding to 2 × uint16 registers and back.
+- `test_modbus_worker_connection_params`: Verifies `set_connection_params()` accepts IP/port/slave ID.
+- `test_modbus_worker_command_queue`: Tests that `queue_setpoint()`, `queue_command()`, `queue_pid_gains()`, and `queue_emergency()` enqueue correct action dicts.
+- `test_modbus_worker_lifecycle`: Verifies the `QThread` starts, runs without errors, and shuts down cleanly.
+
+### 3.9 `test_system_integration.py` (3 tests)
 - `test_system_boot_sequence`: Simulates complete system boot and initial telemetry hydration.
 - `test_closed_loop_moving_state`: Simulates closed-loop position regulation to target setpoint.
 - `test_emergency_estop_interruption`: Simulates physical E-stop button press during active movement, verifying instant motor cutoff and lockout.
+
+---
+
+## 4. Running the Test Suite
+
+### 4.1 Host-Native Tests (No Hardware Required)
+```bash
+cd /path/to/controlador_guia_linear
+PYTHONPATH=. tests/.venv/bin/pytest tests/ -v
+```
+Expected result: **29 passed, 8 skipped** (hardware-in-the-loop tests skipped gracefully).
+
+### 4.2 Full HIL Tests (Live ESP32 via Ethernet)
+```bash
+MODBUS_HOST=192.168.1.100 MODBUS_PORT=502 \
+PYTHONPATH=. tests/.venv/bin/pytest tests/ -v
+```
+All 37 tests should pass when the ESP32 is connected to the network and a DHCP lease has been obtained.

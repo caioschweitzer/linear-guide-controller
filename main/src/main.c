@@ -16,7 +16,7 @@
 #include "ihm_display.h"
 #include "modbus_slave.h"
 
-#define SYSTEM_MAX_TRAVEL_MM 424.115f
+#define SYSTEM_MAX_TRAVEL_MM 670.0f
 
 static TaskHandle_t s_control_task_handle = NULL;
 static pid_controller_t g_pid;
@@ -65,6 +65,7 @@ static void control_loop_task(void *pvParameters) {
             // Publish telemetry to shared structure for Core 0 (IHM & Modbus)
             g_system_data.current_position = current_pos_mm;
             g_system_data.current_velocity = current_vel_mm_s;
+            g_system_data.duty_cycle = g_motor.current_effort;
             g_system_data.button_estop = (gpio_get_level(GPIO_EMERGENCY_PIN) != 0);
             g_system_data.button_start = (gpio_get_level(GPIO_START_PIN) != 0);
             g_system_data.safety_enable = (gpio_get_level(GPIO_SAFETY_ENABLE_PIN) != 0);
@@ -87,14 +88,71 @@ static void control_loop_task(void *pvParameters) {
         }
 
         // 7. Closed-Loop Control Decision
+        static bool s_open_loop_running = false;
+        static TickType_t s_open_loop_start_tick = 0;
+
         if (state == MACHINE_STATE_EMERGENCY) {
+            s_open_loop_running = false;
             pid_reset(&g_pid);
             motor_brake(&g_motor);
             motor_set_effort(&g_motor, 0.0f);
         } else if (state == MACHINE_STATE_MOVING) {
+            s_open_loop_running = false;
             float duty = pid_compute(&g_pid, position_setpoint, current_pos_mm, 0.01f);
             motor_set_effort(&g_motor, duty);
+        } else if (state == MACHINE_STATE_HOMING) {
+            s_open_loop_running = false;
+            pid_reset(&g_pid);
+            if (gpio_get_level(GPIO_HOME_PIN) == 0) { // 0V indicates magnet detected (contact opened with pull-down)
+                motor_brake(&g_motor);
+                motor_set_effort(&g_motor, 0.0f);
+                encoder_clear_count(&g_encoder);
+                kinematics_reset(&g_kinematics);
+                shared_data_request_state_change(MACHINE_STATE_IDLE);
+            } else {
+                motor_set_effort(&g_motor, -60.0f);
+            }
+        } else if (state == MACHINE_STATE_OPEN_LOOP_TEST) {
+            pid_reset(&g_pid);
+            if (!s_open_loop_running) {
+                s_open_loop_running = true;
+                s_open_loop_start_tick = xTaskGetTickCount();
+            }
+
+            uint32_t elapsed_ms = pdTICKS_TO_MS(xTaskGetTickCount() - s_open_loop_start_tick);
+            const float target_travel_mm = SYSTEM_MAX_TRAVEL_MM * 0.80f; // 536.0 mm (80% of travel)
+
+            // Record sample to in-RAM burst buffer (100 Hz sampling)
+            if (g_burst_buffer.sample_count < BURST_BUFFER_MAX_SAMPLES) {
+                uint16_t idx = g_burst_buffer.sample_count;
+                g_burst_buffer.samples[idx].time_ms = elapsed_ms;
+                g_burst_buffer.samples[idx].position = current_pos_mm;
+                g_burst_buffer.samples[idx].velocity = current_vel_mm_s;
+                g_burst_buffer.sample_count++;
+            }
+
+            // Stop condition 1: 80% travel threshold reached (536.0 mm)
+            if (current_pos_mm >= target_travel_mm) {
+                motor_brake(&g_motor);
+                motor_set_effort(&g_motor, 0.0f);
+                s_open_loop_running = false;
+                g_burst_buffer.status = BURST_STATUS_READY;
+                shared_data_request_state_change(MACHINE_STATE_IDLE);
+            }
+            // Stop condition 2: Safety timeout (5.0 seconds)
+            else if (elapsed_ms >= 5000) {
+                motor_brake(&g_motor);
+                motor_set_effort(&g_motor, 0.0f);
+                s_open_loop_running = false;
+                g_burst_buffer.status = BURST_STATUS_ABORTED;
+                shared_data_request_state_change(MACHINE_STATE_IDLE);
+            }
+            // Ongoing drive: Full effort +100.0%
+            else {
+                motor_set_effort(&g_motor, 100.0f);
+            }
         } else { // MACHINE_STATE_IDLE
+            s_open_loop_running = false;
             pid_reset(&g_pid);
             motor_set_effort(&g_motor, 0.0f);
         }
@@ -103,11 +161,11 @@ static void control_loop_task(void *pvParameters) {
     }
 }
 
-// Local IHM & Telemetry Display Task Pinned to Core 0 (5 Hz / 200 ms period)
+// Local IHM & Telemetry Display Task Pinned to Core 0 (10 Hz / 100 ms period)
 static void ihm_task(void *pvParameters) {
     (void)pvParameters;
     TickType_t last_wake_time = xTaskGetTickCount();
-    const TickType_t period = pdMS_TO_TICKS(200); // 5 Hz
+    const TickType_t period = pdMS_TO_TICKS(100); // 10 Hz task execution
 
     float pos_mm = 0.0f;
     float vel_mm_s = 0.0f;
@@ -180,7 +238,5 @@ void app_main(void) {
         NULL,
         0
     );
-
-    ESP_LOGI(TAG, "Linear Actuator Controller System Fully Initialized & Operational.");
 #endif
 }

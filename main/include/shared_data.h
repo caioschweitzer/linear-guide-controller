@@ -15,6 +15,7 @@ typedef void* SemaphoreHandle_t;
 #define pdTRUE true
 #define pdFALSE false
 #define pdMS_TO_TICKS(ms) ((TickType_t)(ms))
+#define GPIO_NUM_16 16
 #define GPIO_NUM_12 12
 #define GPIO_NUM_11 11
 static inline SemaphoreHandle_t xSemaphoreCreateMutex(void) { static int dummy = 1; return (void*)&dummy; }
@@ -29,18 +30,44 @@ extern "C" {
 
 #define GPIO_EMERGENCY_PIN     GPIO_NUM_12
 #define GPIO_START_PIN         GPIO_NUM_11
+#define GPIO_HOME_PIN          GPIO_NUM_16
 #define GPIO_SAFETY_ENABLE_PIN GPIO_NUM_13
 
 typedef enum {
     MACHINE_STATE_IDLE = 0,
     MACHINE_STATE_MOVING = 1,
-    MACHINE_STATE_EMERGENCY = 2
+    MACHINE_STATE_EMERGENCY = 2,
+    MACHINE_STATE_HOMING = 3,
+    MACHINE_STATE_OPEN_LOOP_TEST = 4
 } machine_state_t;
+
+#define BURST_BUFFER_MAX_SAMPLES 550
+
+typedef enum {
+    BURST_STATUS_IDLE = 0,
+    BURST_STATUS_CAPTURING = 1,
+    BURST_STATUS_READY = 2,
+    BURST_STATUS_ABORTED = 3
+} burst_status_t;
+
+typedef struct {
+    uint32_t time_ms;
+    float position;
+    float velocity;
+} open_loop_sample_t;
+
+typedef struct {
+    open_loop_sample_t samples[BURST_BUFFER_MAX_SAMPLES];
+    uint16_t sample_count;
+    uint16_t status;      // burst_status_t
+    uint16_t read_index;  // For Modbus indexed reading
+} burst_buffer_t;
 
 typedef struct {
     float position_setpoint;  // mm
     float current_position;   // mm
     float current_velocity;   // mm/s
+    float duty_cycle;         // % motor effort (-100.0 to 100.0)
     float kp;                 // Proportional gain
     float ki;                 // Integral gain
     float kd;                 // Derivative gain
@@ -54,6 +81,7 @@ typedef struct {
 // Global instance & mutex handle
 extern SystemData g_system_data;
 extern SemaphoreHandle_t g_system_mutex;
+extern burst_buffer_t g_burst_buffer;
 
 // Function prototypes for thread-safe IPC
 void shared_data_init(void);

@@ -20,14 +20,16 @@ extern "C" {
 #define CMD_START               1
 #define CMD_STOP                2
 #define CMD_RESET               3
+#define CMD_HOME                4
+#define CMD_OPEN_LOOP_TEST      5
 #define CMD_SIMULATE_EMERGENCY  99
 
 // Modbus Register Map Offsets & Sizes
 #define HOLDING_REG_START_ADDR  0x0000
-#define HOLDING_REG_COUNT       9      // Setpoint (2), Command (1), Kp (2), Ki (2), Kd (2)
+#define HOLDING_REG_COUNT       10     // Setpoint (2), Command (1), Kp (2), Ki (2), Kd (2), Burst Read Index (1)
 
 #define INPUT_REG_START_ADDR    0x0000
-#define INPUT_REG_COUNT         5      // Pos (2 regs float32), Vel (2 regs float32), State (1 reg uint16)
+#define INPUT_REG_COUNT         15     // Pos (2), Vel (2), Duty (2), State (1), Burst Status (1), Count (1), Time (2), Pos (2), Vel (2)
 
 #define DISCRETE_REG_START_ADDR 0x0000
 #define DISCRETE_REG_COUNT      3      // E-Stop (Bit 0), Start (Bit 1), Safety Enable (Bit 2)
@@ -37,24 +39,35 @@ extern "C" {
 
 // Holding register structure
 typedef struct {
-    uint16_t setpoint_hi; // 0x0000 Float32 MSW
-    uint16_t setpoint_lo; // 0x0001 Float32 LSW
-    uint16_t command;     // 0x0002 uint16 (1: START, 2: STOP, 3: RESET, 99: SIMULATE_EMERGENCY)
-    uint16_t kp_hi;       // 0x0003 Float32 MSW
-    uint16_t kp_lo;       // 0x0004 Float32 LSW
-    uint16_t ki_hi;       // 0x0005 Float32 MSW
-    uint16_t ki_lo;       // 0x0006 Float32 LSW
-    uint16_t kd_hi;       // 0x0007 Float32 MSW
-    uint16_t kd_lo;       // 0x0008 Float32 LSW
+    uint16_t setpoint_hi;      // 0x0000 Float32 MSW
+    uint16_t setpoint_lo;      // 0x0001 Float32 LSW
+    uint16_t command;          // 0x0002 uint16 (1: START, 2: STOP, 3: RESET, 4: HOME, 5: OPEN_LOOP_TEST, 99: SIMULATE_EMERGENCY)
+    uint16_t kp_hi;            // 0x0003 Float32 MSW
+    uint16_t kp_lo;            // 0x0004 Float32 LSW
+    uint16_t ki_hi;            // 0x0005 Float32 MSW
+    uint16_t ki_lo;            // 0x0006 Float32 LSW
+    uint16_t kd_hi;            // 0x0007 Float32 MSW
+    uint16_t kd_lo;            // 0x0008 Float32 LSW
+    uint16_t burst_read_index; // 0x0009 uint16 Sample index to read (0 to 399)
 } holding_reg_params_t;
 
 // Input register structure
 typedef struct {
-    uint16_t pos_hi;   // Float32 MSW
-    uint16_t pos_lo;   // Float32 LSW
-    uint16_t vel_hi;   // Float32 MSW
-    uint16_t vel_lo;   // Float32 LSW
-    uint16_t state;    // uint16_t (0: IDLE, 1: MOVING, 2: EMERGENCY)
+    uint16_t pos_hi;             // Float32 MSW (0x0000)
+    uint16_t pos_lo;             // Float32 LSW (0x0001)
+    uint16_t vel_hi;             // Float32 MSW (0x0002)
+    uint16_t vel_lo;             // Float32 LSW (0x0003)
+    uint16_t duty_hi;            // Float32 MSW (0x0004)
+    uint16_t duty_lo;            // Float32 LSW (0x0005)
+    uint16_t state;              // uint16_t (0: IDLE, 1: MOVING, 2: EMERGENCY, 3: HOMING, 4: OPEN_LOOP_TEST) (0x0006)
+    uint16_t burst_status;       // uint16_t (0: IDLE, 1: CAPTURING, 2: READY, 3: ABORTED) (0x0007)
+    uint16_t burst_sample_count; // uint16_t total recorded samples (0x0008)
+    uint16_t sample_time_hi;     // uint32_t ms MSW (0x0009)
+    uint16_t sample_time_lo;     // uint32_t ms LSW (0x000A)
+    uint16_t sample_pos_hi;      // Float32 MSW (0x000B)
+    uint16_t sample_pos_lo;      // Float32 LSW (0x000C)
+    uint16_t sample_vel_hi;      // Float32 MSW (0x000D)
+    uint16_t sample_vel_lo;      // Float32 LSW (0x000E)
 } input_reg_params_t;
 
 // Discrete inputs structure (FC 0x02)
@@ -76,6 +89,7 @@ extern coil_reg_params_t g_modbus_coil_reg;
 // Function prototypes
 esp_err_t modbus_slave_init(void);
 void modbus_slave_start_task(void);
+void modbus_slave_sync_buffers(void);
 
 #ifdef __cplusplus
 }

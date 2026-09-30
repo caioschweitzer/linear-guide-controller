@@ -7,6 +7,7 @@ import pytest
 MACHINE_STATE_IDLE = 0
 MACHINE_STATE_MOVING = 1
 MACHINE_STATE_EMERGENCY = 2
+MACHINE_STATE_HOMING = 3
 
 
 class IHMConfigStruct(ctypes.Structure):
@@ -26,6 +27,9 @@ class IHMDisplayStruct(ctypes.Structure):
         ("led_state", ctypes.c_bool),
         ("last_led_toggle_ms", ctypes.c_uint32),
         ("last_reconnect_attempt_ms", ctypes.c_uint32),
+        ("last_lcd_update_ms", ctypes.c_uint32),
+        ("last_line1", ctypes.c_char * 17),
+        ("last_line2", ctypes.c_char * 17),
     ]
 
 
@@ -33,9 +37,10 @@ def load_ihm_lib():
     so_path = os.path.join(os.path.dirname(__file__), "libihm_display.so")
     if not os.path.exists(so_path):
         import subprocess
-        src = os.path.join(os.path.dirname(__file__), "..", "main", "ihm_display.c")
-        inc = os.path.join(os.path.dirname(__file__), "..", "main")
-        subprocess.run(["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST", src, "-o", so_path, f"-I{inc}"], check=True)
+        src = os.path.join(os.path.dirname(__file__), "..", "main", "src", "ihm_display.c")
+        inc1 = os.path.join(os.path.dirname(__file__), "..", "main", "include")
+        inc2 = os.path.join(os.path.dirname(__file__), "..", "main", "src")
+        subprocess.run(["gcc", "-shared", "-fPIC", "-O2", "-DHOST_TEST", src, "-o", so_path, f"-I{inc1}", f"-I{inc2}"], check=True)
 
     lib = ctypes.CDLL(so_path)
 
@@ -107,6 +112,14 @@ def test_lcd_formatting_normal_and_extreme(ihm_lib):
     assert len(s2_ext) == 16
     assert s2_ext.endswith("EMERG ")
 
+    # Test HOMING state formatting
+    ihm_lib.ihm_format_lines(-5.0, -15.0, MACHINE_STATE_HOMING, line1, line2)
+    s1_home = line1.value.decode("utf-8")
+    s2_home = line2.value.decode("utf-8")
+    assert len(s1_home) == 16
+    assert len(s2_home) == 16
+    assert s2_home == "V:-15.0 S:HOMING"
+
     # Test NaN / INF Guardrails
     ihm_lib.ihm_format_lines(float("nan"), float("inf"), MACHINE_STATE_IDLE, line1, line2)
     s1_nan = line1.value.decode("utf-8")
@@ -135,6 +148,18 @@ def test_led_timing_and_state_transitions(ihm_lib, ihm_ctx):
 
     # Call at 1000 ms -> toggles back to True
     ihm_lib.ihm_update_led(ctypes.byref(ihm_ctx), MACHINE_STATE_MOVING, 1000)
+    assert ihm_ctx.led_state is True
+
+    # Test HOMING state -> 2 Hz blink (250 ms toggle interval)
+    ihm_ctx.last_led_toggle_ms = 0
+    ihm_ctx.led_state = False
+
+    # Call at 100 ms -> no toggle
+    ihm_lib.ihm_update_led(ctypes.byref(ihm_ctx), MACHINE_STATE_HOMING, 100)
+    assert ihm_ctx.led_state is False
+
+    # Call at 250 ms -> toggles to True
+    ihm_lib.ihm_update_led(ctypes.byref(ihm_ctx), MACHINE_STATE_HOMING, 250)
     assert ihm_ctx.led_state is True
 
     # Test EMERGENCY state -> 5 Hz blink (100 ms toggle interval)

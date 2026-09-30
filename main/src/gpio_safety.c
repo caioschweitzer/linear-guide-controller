@@ -87,6 +87,16 @@ esp_err_t gpio_safety_init(void) {
     };
     gpio_config(&io_conf_start);
 
+    // 1b. Configure GPIO 16 (Home Sensor) - Input with Internal Pull-down (NC Magnetic Sensor, Active-LOW / 0V)
+    gpio_config_t io_conf_home = {
+        .pin_bit_mask = (1ULL << GPIO_HOME_PIN),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&io_conf_home);
+
     // 2. Configure GPIO 12 (Emergency Button) - Input with Pull-up & Falling Edge Interrupt
     gpio_config_t io_conf_emerg = {
         .pin_bit_mask = (1ULL << GPIO_EMERGENCY_PIN),
@@ -106,7 +116,12 @@ esp_err_t gpio_safety_init(void) {
         .intr_type = GPIO_INTR_DISABLE
     };
     gpio_config(&io_conf_motor);
-    gpio_set_level(GPIO_NUM_13, 1); // Enable motor initially if safe
+    if (gpio_get_level(GPIO_EMERGENCY_PIN) == 0) {
+        gpio_set_level(GPIO_NUM_13, 0); // Disable motor output immediately if emergency button is pressed on startup
+        shared_data_set_state_atomic(MACHINE_STATE_EMERGENCY);
+    } else {
+        gpio_set_level(GPIO_NUM_13, 1); // Enable motor initially if safe
+    }
 
     // 4. Install ISR Service & Add Handler for GPIO 12
     esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
@@ -133,6 +148,12 @@ esp_err_t gpio_safety_init(void) {
 
 void gpio_safety_trigger_emergency_software(void) {
     gpio12_emergency_isr(NULL);
+}
+
+void gpio_safety_reset_simulation(void) {
+#ifdef HOST_TEST
+    s_simulated_emergency_gpio = 1;
+#endif
 }
 
 bool gpio_safety_is_emergency_active(void) {

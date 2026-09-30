@@ -26,6 +26,7 @@ esp_err_t gpio_safety_init(void);
 
 // Software simulation helper for automated testing (triggers Emergency flow)
 void gpio_safety_trigger_emergency_software(void);
+void gpio_safety_reset_simulation(void);
 
 // Query if emergency state is currently active
 bool gpio_safety_is_emergency_active(void);

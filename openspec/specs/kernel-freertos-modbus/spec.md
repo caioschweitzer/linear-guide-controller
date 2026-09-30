@@ -44,3 +44,15 @@ The project SHALL include a Python test script (`tests/test_modbus_kernel.py`) u
 #### Scenario: Automated Modbus Loopback Test
 - **WHEN** `pytest tests/test_modbus_kernel.py` is executed over the serial port
 - **THEN** it MUST successfully connect to Slave ID 1, write a float setpoint to Holding Register `0x0000`, verify the written setpoint, and read initial Input Registers values.
+
+### Requirement: Home Sensor Discrete Input Reporting
+The system SHALL expose the physical state of the Home sensor on Discrete Input Bit 3 via Modbus Function Code 0x02, reporting `1` (Active/Detected) when `GPIO 16` is LOW (0V) and `0` (Clear/Inactive) when `GPIO 16` is HIGH (3.3V).
+
+#### Scenario: Telemetry when magnet is absent
+- **WHEN** `GPIO 16` is HIGH (3.3V)
+- **THEN** Discrete Input Bit 3 SHALL be `0` (CLEAR).
+
+#### Scenario: Telemetry when magnet is present
+- **WHEN** `GPIO 16` is LOW (0V)
+- **THEN** Discrete Input Bit 3 SHALL be `1` (DETECTED).
+

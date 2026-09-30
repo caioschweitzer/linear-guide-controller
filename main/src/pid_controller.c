@@ -49,8 +49,10 @@ float pid_compute(pid_controller_t *pid, float setpoint, float current_position,
 
     float error = setpoint - current_position;
 
-    // In-position deadband check (zeros effort when within deadband)
+    // In-position deadband check (zeros effort and clears integral accumulator when within deadband)
     if (fabsf(error) <= pid->config.deadband_mm) {
+        pid->integral_accumulator = 0.0f;
+        pid->last_output = 0.0f;
         return 0.0f;
     }
 
@@ -74,15 +76,26 @@ float pid_compute(pid_controller_t *pid, float setpoint, float current_position,
         pid->prev_position = current_position;
     }
 
-    // Unsaturated control output estimate prior to new integration
-    float u_unsat_current = p_term + pid->integral_accumulator + d_term;
-
-    // Conditional Anti-Windup: freeze integration if saturated in direction of error
-    bool saturate_high = (u_unsat_current >= pid->config.output_max && error > 0.0f);
-    bool saturate_low = (u_unsat_current <= pid->config.output_min && error < 0.0f);
-
-    if (!saturate_high && !saturate_low && dt > 0.0001f) {
+    // Integrate error
+    if (dt > 0.0001f) {
         pid->integral_accumulator += pid->config.ki * error * dt;
+    }
+
+    // Dynamic anti-windup: clamp integral accumulator so total output u_unsat does not saturate beyond driver capacity
+    float max_i_allowed = pid->config.output_max - p_term - d_term;
+    float min_i_allowed = pid->config.output_min - p_term - d_term;
+
+    if (error > 0.0f && pid->integral_accumulator > max_i_allowed) {
+        pid->integral_accumulator = (max_i_allowed > 0.0f) ? max_i_allowed : 0.0f;
+    } else if (error < 0.0f && pid->integral_accumulator < min_i_allowed) {
+        pid->integral_accumulator = (min_i_allowed < 0.0f) ? min_i_allowed : 0.0f;
+    }
+
+    // Hard absolute safety clamp on integral accumulator bounds [output_min, output_max]
+    if (pid->integral_accumulator > pid->config.output_max) {
+        pid->integral_accumulator = pid->config.output_max;
+    } else if (pid->integral_accumulator < pid->config.output_min) {
+        pid->integral_accumulator = pid->config.output_min;
     }
 
     float i_term = pid->integral_accumulator;
