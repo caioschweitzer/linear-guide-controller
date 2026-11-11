@@ -15,9 +15,10 @@ typedef int esp_err_t;
 extern "C" {
 #endif
 
-// Wi-Fi Default Configuration
-#define WIFI_SSID_DEFAULT       "cerberus"
-#define WIFI_PASS_DEFAULT       "asenhaehsecreta"
+// Modbus RTU Serial Configuration (UART0 via onboard USB-C serial bridge)
+#define MB_SLAVE_ADDR           1
+#define MB_UART_PORT_NUM        0          // UART_NUM_0
+#define MB_UART_BAUDRATE        115200     // 8N1
 
 // Modbus Command Register Flags
 #define CMD_NONE                0

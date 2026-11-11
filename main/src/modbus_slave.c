@@ -5,54 +5,9 @@
 #include <string.h>
 
 #ifndef HOST_TEST
-#include "esp_event.h"
+#include "driver/uart.h"
 #include "esp_log.h"
-#include "esp_netif.h"
-#include "esp_wifi.h"
-#include "nvs_flash.h"
 #include "mbcontroller.h"
-
-#define MB_TCP_PORT_NUMBER 502
-#define MB_SLAVE_ADDR 1
-
-// Static IP configuration (disables DHCP client on ESP32 Wi-Fi)
-#define STATIC_IP      "192.168.1.100"
-#define STATIC_NETMASK "255.255.255.0"
-#define STATIC_GW      "192.168.1.1"
-
-static const char *TAG = "WIFI_MB";
-static esp_netif_t *s_sta_netif = NULL;
-static bool s_wifi_connected = false;
-
-static void wifi_event_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data) {
-  if (event_base == WIFI_EVENT) {
-    if (event_id == WIFI_EVENT_STA_START) {
-      ESP_LOGI(TAG, "Wi-Fi Station started, connecting to SSID '%s'...", WIFI_SSID_DEFAULT);
-      esp_wifi_connect();
-    } else if (event_id == WIFI_EVENT_STA_CONNECTED) {
-      s_wifi_connected = true;
-      ESP_LOGI(TAG, "=================================================");
-      ESP_LOGI(TAG, " Wi-Fi Associated to AP: '%s'", WIFI_SSID_DEFAULT);
-      ESP_LOGI(TAG, " Static IP   : %s", STATIC_IP);
-      ESP_LOGI(TAG, " Netmask     : %s", STATIC_NETMASK);
-      ESP_LOGI(TAG, " Gateway     : %s", STATIC_GW);
-      ESP_LOGI(TAG, " Modbus TCP Slave listening on port %d", MB_TCP_PORT_NUMBER);
-      ESP_LOGI(TAG, "=================================================");
-    } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
-      s_wifi_connected = false;
-      wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
-      ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d)! Reconnecting...", disconn ? disconn->reason : 0);
-      esp_wifi_connect();
-    }
-  } else if (event_base == IP_EVENT) {
-    if (event_id == IP_EVENT_STA_GOT_IP) {
-      ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-      s_wifi_connected = true;
-      ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP: " IPSTR, IP2STR(&event->ip_info.ip));
-    }
-  }
-}
 #endif
 
 // Internal buffers mapped to Modbus stack
@@ -94,76 +49,22 @@ esp_err_t modbus_slave_init(void) {
                      &g_modbus_holding_reg.kd_lo);
   g_modbus_holding_reg.burst_read_index = 0;
 #ifndef HOST_TEST
-  // 1. Re-enable console ASCII logging on UART0 / USB-C
-  esp_log_level_set("*", ESP_LOG_INFO);
+  // 1. Suppress ASCII logging: UART0 (USB-C bridge) carries binary Modbus RTU frames
+  esp_log_level_set("*", ESP_LOG_NONE);
 
-  // 2. Initialize NVS (required for Wi-Fi RF calibration and configuration)
-  esp_err_t ret = nvs_flash_init();
-  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-    ESP_ERROR_CHECK(nvs_flash_erase());
-    ret = nvs_flash_init();
-  }
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize NVS: %s", esp_err_to_name(ret));
-    return ret;
-  }
+  // 2. Initialize Modbus RTU Serial Slave on UART0 (USB-C serial port)
+  mb_communication_info_t comm_info = {
+      .ser_opts = {
+          .mode = MB_RTU,
+          .port = MB_UART_PORT_NUM,
+          .uid = MB_SLAVE_ADDR,
+          .baudrate = MB_UART_BAUDRATE,
+          .data_bits = UART_DATA_8_BITS,
+          .stop_bits = UART_STOP_BITS_1,
+          .parity = MB_PARITY_NONE,
+      }};
 
-  // 3. Initialize TCP/IP stack and default event loop
-  ESP_ERROR_CHECK(esp_netif_init());
-  ESP_ERROR_CHECK(esp_event_loop_create_default());
-  s_sta_netif = esp_netif_create_default_wifi_sta();
-
-  // 3a. Disable DHCP client on Wi-Fi STA and apply static IP
-  esp_err_t ip_err = esp_netif_dhcpc_stop(s_sta_netif);
-  if (ip_err != ESP_OK && ip_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
-    ESP_LOGW(TAG, "esp_netif_dhcpc_stop notice: %s", esp_err_to_name(ip_err));
-  }
-  esp_netif_ip_info_t ip_info;
-  memset(&ip_info, 0, sizeof(ip_info));
-  ip_info.ip.addr = esp_ip4addr_aton(STATIC_IP);
-  ip_info.netmask.addr = esp_ip4addr_aton(STATIC_NETMASK);
-  ip_info.gw.addr = esp_ip4addr_aton(STATIC_GW);
-  ip_err = esp_netif_set_ip_info(s_sta_netif, &ip_info);
-  if (ip_err != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to set static IP: %s", esp_err_to_name(ip_err));
-  } else {
-    ESP_LOGI(TAG, "Static IP configured on Wi-Fi STA: %s (Netmask: %s, GW: %s)",
-             STATIC_IP, STATIC_NETMASK, STATIC_GW);
-  }
-
-  // 4. Initialize ESP32 Wi-Fi in Station mode
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(
-      WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(
-      IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
-
-  wifi_config_t wifi_config = {
-      .sta = {
-          .ssid = WIFI_SSID_DEFAULT,
-          .password = WIFI_PASS_DEFAULT,
-          .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-          .pmf_cfg = {
-              .capable = true,
-              .required = false,
-          },
-      },
-  };
-  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-  ESP_ERROR_CHECK(esp_wifi_start());
-
-  // 5. Initialize Modbus TCP Slave Controller
-  mb_communication_info_t comm_info = {.tcp_opts = {.port = MB_TCP_PORT_NUMBER,
-                                                    .mode = MB_TCP,
-                                                    .addr_type = MB_IPV4,
-                                                    .ip_addr_table = NULL,
-                                                    .ip_netif_ptr = s_sta_netif,
-                                                    .uid = MB_SLAVE_ADDR}};
-
-  esp_err_t err = mbc_slave_create_tcp(&comm_info, &s_mbc_handle);
+  esp_err_t err = mbc_slave_create_serial(&comm_info, &s_mbc_handle);
   if (err != ESP_OK)
     return err;
 

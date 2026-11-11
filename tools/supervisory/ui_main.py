@@ -14,7 +14,9 @@ from PyQt6.QtWidgets import (
 
 import pyqtgraph as pg
 
-from tools.supervisory.modbus_worker import ModbusWorker
+from tools.supervisory.modbus_worker import (
+    ModbusWorker, list_serial_ports, DEFAULT_SERIAL_PORT, DEFAULT_BAUDRATE
+)
 
 # Dark Theme QSS Stylesheet
 DARK_STYLESHEET = """
@@ -272,7 +274,7 @@ class SupervisoryMainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Linear Guide Actuator - Modbus TCP Supervisory (SCADA)")
+        self.setWindowTitle("Linear Guide Actuator - Modbus RTU (USB Serial) Supervisory (SCADA)")
         self.resize(1280, 800)
 
         # Apply dark mode stylesheet
@@ -302,7 +304,7 @@ class SupervisoryMainWindow(QMainWindow):
 
         # Build UI layout
         self.init_ui()
-        self.append_log("📡 Supervisório pronto (Modbus TCP). Conecte-se à rede Wi-Fi 'cerberus' e configure o IP do ESP32.")
+        self.append_log("🔌 Supervisório pronto (Modbus RTU via USB). Conecte o cabo USB-C do ESP32 e selecione a porta serial.")
 
     def init_ui(self):
         main_widget = QWidget()
@@ -337,28 +339,35 @@ class SupervisoryMainWindow(QMainWindow):
         layout.setSpacing(10)
 
         # Title Label
-        title_label = QLabel("🌐 LINEAR GUIDE SUPERVISORY (MODBUS TCP)")
+        title_label = QLabel("🔌 LINEAR GUIDE SUPERVISORY (MODBUS RTU / USB)")
         title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         title_label.setStyleSheet("color: #89B4FA;")
         layout.addWidget(title_label)
 
         layout.addStretch()
 
-        # IP Address Input LineEdit
-        layout.addWidget(QLabel("IP Addr:"))
-        self.ip_input = QLineEdit("192.168.1.100")
-        self.ip_input.setPlaceholderText("ex: 192.168.1.100")
-        self.ip_input.setToolTip("Endereço IP Wi-Fi do ESP32 (verifique o console USB ao iniciar)")
-        self.ip_input.setMinimumWidth(130)
-        layout.addWidget(self.ip_input)
+        # Serial Port ComboBox (editable, auto-populated with USB-UART devices)
+        layout.addWidget(QLabel("Serial:"))
+        self.serial_combo = QComboBox()
+        self.serial_combo.setEditable(True)
+        self.serial_combo.setMinimumWidth(150)
+        self.serial_combo.setToolTip("Porta serial USB do ESP32 (ex: /dev/ttyUSB0, /dev/ttyACM0)")
+        layout.addWidget(self.serial_combo)
 
-        # TCP Port SpinBox
-        layout.addWidget(QLabel("Port:"))
-        self.port_spin = QSpinBox()
-        self.port_spin.setRange(1, 65535)
-        self.port_spin.setValue(502)
-        self.port_spin.setMinimumWidth(75)
-        layout.addWidget(self.port_spin)
+        self.refresh_ports_btn = QPushButton("⟳")
+        self.refresh_ports_btn.setToolTip("Atualizar lista de portas seriais")
+        self.refresh_ports_btn.setFixedWidth(36)
+        self.refresh_ports_btn.clicked.connect(self.refresh_serial_ports)
+        layout.addWidget(self.refresh_ports_btn)
+
+        # Baudrate ComboBox
+        layout.addWidget(QLabel("Baud:"))
+        self.baud_combo = QComboBox()
+        self.baud_combo.addItems(["9600", "19200", "38400", "57600", "115200", "230400"])
+        self.baud_combo.setCurrentText(str(DEFAULT_BAUDRATE))
+        layout.addWidget(self.baud_combo)
+
+        self.refresh_serial_ports()
 
         # Slave ID SpinBox
         layout.addWidget(QLabel("Slave ID:"))
@@ -627,12 +636,20 @@ class SupervisoryMainWindow(QMainWindow):
 
         return box
 
+    def refresh_serial_ports(self):
+        current = self.serial_combo.currentText().strip()
+        ports = list_serial_ports()
+        self.serial_combo.clear()
+        self.serial_combo.addItems(ports if ports else [DEFAULT_SERIAL_PORT])
+        if current:
+            self.serial_combo.setCurrentText(current)
+
     def toggle_connection(self):
         if not self.modbus_worker._user_wants_connected and not self.modbus_worker._connected:
-            host = self.ip_input.text().strip()
-            port = self.port_spin.value()
+            serial_port = self.serial_combo.currentText().strip()
+            baudrate = int(self.baud_combo.currentText())
             slave_id = self.slave_spin.value()
-            self.modbus_worker.set_connection_params(host, port, slave_id)
+            self.modbus_worker.set_connection_params(serial_port, baudrate, slave_id)
             self.modbus_worker.connect_modbus()
         else:
             self.modbus_worker.disconnect_modbus()
@@ -735,7 +752,7 @@ class SupervisoryMainWindow(QMainWindow):
 
     def start_open_loop_test(self):
         if not self.modbus_worker._connected:
-            QMessageBox.warning(self, "Disconnected", "Connect to Modbus TCP slave first.")
+            QMessageBox.warning(self, "Disconnected", "Connect to the Modbus RTU slave (USB serial) first.")
             return
 
         if abs(self.latest_position) > 5.0:

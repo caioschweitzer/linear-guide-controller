@@ -69,10 +69,10 @@ def pytest_configure(config):
     )
 
 
-# ─── Modbus TCP connection parameters (env-configurable) ─────────────────────
+# ─── Modbus connection parameters (env-configurable) ─────────────────────────
 
-MODBUS_HOST = os.getenv("MODBUS_HOST", "192.168.1.100")
-MODBUS_PORT = int(os.getenv("MODBUS_PORT", "502"))
+MODBUS_SERIAL_PORT = os.getenv("MODBUS_SERIAL_PORT", "/dev/ttyUSB0")
+MODBUS_BAUDRATE = int(os.getenv("MODBUS_BAUDRATE", "115200"))
 MODBUS_TIMEOUT = float(os.getenv("MODBUS_TIMEOUT", "0.5"))
 MODBUS_RETRIES = int(os.getenv("MODBUS_RETRIES", "1"))
 SLAVE_ID = 1
@@ -98,35 +98,45 @@ def timeout_guardrail(seconds: int):
         yield
 
 
-# ─── Session-scoped Modbus TCP client fixture ─────────────────────────────────
+# ─── Session-scoped Modbus RTU / Serial client fixture ────────────────────────
 
 @pytest.fixture(scope="session")
 def tcp_modbus_client():
     """
-    Session-scoped Modbus TCP client shared across all HIL test modules.
+    Session-scoped Modbus client shared across all HIL test modules.
+    Configured for Modbus RTU over USB serial (e.g. /dev/ttyUSB0 at 115200 baud).
 
     Automatically skipped when no live ESP32 target is reachable at
-    MODBUS_HOST:MODBUS_PORT — allows the full test suite to run in CI
+    MODBUS_SERIAL_PORT — allows the full test suite to run in CI
     without physical hardware.
     """
     try:
-        from pymodbus.client import ModbusTcpClient
+        from pymodbus.client import ModbusSerialClient
     except ImportError:
-        from pymodbus.client.sync import ModbusTcpClient
+        from pymodbus.client.sync import ModbusSerialClient
 
-    client = ModbusTcpClient(
-        host=MODBUS_HOST,
-        port=MODBUS_PORT,
+    client = ModbusSerialClient(
+        port=MODBUS_SERIAL_PORT,
+        baudrate=MODBUS_BAUDRATE,
+        bytesize=8,
+        parity="N",
+        stopbits=1,
         timeout=MODBUS_TIMEOUT,
         retries=MODBUS_RETRIES,
     )
     try:
         connected = client.connect()
     except Exception as exc:
-        pytest.skip(f"Modbus TCP target {MODBUS_HOST}:{MODBUS_PORT} unreachable: {exc}")
+        pytest.skip(f"Modbus Serial target {MODBUS_SERIAL_PORT} unreachable: {exc}")
 
     if not connected:
-        pytest.skip(f"Could not connect to Modbus TCP target {MODBUS_HOST}:{MODBUS_PORT}")
+        pytest.skip(f"Could not connect to Modbus Serial port {MODBUS_SERIAL_PORT}")
 
     yield client
     client.close()
+
+
+@pytest.fixture(scope="session")
+def modbus_client(tcp_modbus_client):
+    """Alias for tcp_modbus_client."""
+    return tcp_modbus_client

@@ -7,9 +7,27 @@ from typing import List, Optional, Tuple, Dict, Any
 from PyQt6.QtCore import QThread, pyqtSignal
 
 try:
-    from pymodbus.client import ModbusTcpClient
+    from pymodbus.client import ModbusSerialClient
 except ImportError:
-    from pymodbus.client.sync import ModbusTcpClient  # Fallback for older pymodbus
+    from pymodbus.client.sync import ModbusSerialClient  # Fallback for older pymodbus
+
+try:
+    from serial.tools import list_ports
+except ImportError:  # pyserial not installed
+    list_ports = None
+
+
+DEFAULT_SERIAL_PORT = "/dev/ttyUSB0"
+DEFAULT_BAUDRATE = 115200
+
+
+def list_serial_ports() -> List[str]:
+    """Returns available serial ports (USB-UART bridges first)."""
+    if list_ports is None:
+        return []
+    ports = [p.device for p in list_ports.comports()]
+    ports.sort(key=lambda d: (not ("ttyUSB" in d or "ttyACM" in d), d))
+    return ports
 
 
 def registers_to_float(hi: int, lo: int) -> float:
@@ -27,7 +45,7 @@ def float_to_registers(val: float) -> Tuple[int, int]:
 
 class ModbusWorker(QThread):
     """
-    Dedicated QThread worker for executing Modbus TCP socket I/O asynchronously.
+    Dedicated QThread worker for executing Modbus RTU serial (USB-UART) I/O asynchronously.
     Prevents blocking the PyQt6 GUI main event loop and supports non-blocking auto-reconnect.
     """
     telemetry_updated = pyqtSignal(dict)
@@ -38,8 +56,8 @@ class ModbusWorker(QThread):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.host: str = "192.168.1.100"
-        self.port: int = 502
+        self.serial_port: str = DEFAULT_SERIAL_PORT
+        self.baudrate: int = DEFAULT_BAUDRATE
         self.slave_id: int = 1
         self.poll_interval_sec: float = 0.05  # 20Hz polling interval (50ms)
         self.reconnect_interval_sec: float = 2.0  # Retry connection every 2 seconds
@@ -48,14 +66,15 @@ class ModbusWorker(QThread):
         self._connected: bool = False
         self._user_wants_connected: bool = False
         self._last_reconnect_attempt: float = 0.0
-        self._client: Optional[ModbusTcpClient] = None
+        self._client: Optional[ModbusSerialClient] = None
         self._command_queue: queue.Queue = queue.Queue()
         self._last_burst_status: int = 0
         self._is_downloading_burst: bool = False
 
-    def set_connection_params(self, host: str = "192.168.1.100", port: int = 502, slave_id: int = 1):
-        self.host = host
-        self.port = port
+    def set_connection_params(self, serial_port: str = DEFAULT_SERIAL_PORT,
+                              baudrate: int = DEFAULT_BAUDRATE, slave_id: int = 1):
+        self.serial_port = serial_port
+        self.baudrate = baudrate
         self.slave_id = slave_id
 
     def connect_modbus(self):
@@ -90,7 +109,7 @@ class ModbusWorker(QThread):
 
     def run(self):
         self._running = True
-        self.log_message.emit("Modbus TCP worker thread started.")
+        self.log_message.emit("Modbus RTU worker thread started.")
 
         while self._running:
             # Process queued action requests first
@@ -110,13 +129,13 @@ class ModbusWorker(QThread):
                     if telemetry:
                         self.telemetry_updated.emit(telemetry)
                 except Exception as e:
-                    self.log_message.emit(f"Error during Modbus TCP polling: {e}")
+                    self.log_message.emit(f"Error during Modbus RTU polling: {e}")
                     self._handle_disconnect(f"Communication error: {e}")
 
             time.sleep(self.poll_interval_sec)
 
         self._cleanup_client()
-        self.log_message.emit("Modbus TCP worker thread stopped.")
+        self.log_message.emit("Modbus RTU worker thread stopped.")
 
     def _process_command_queue(self):
         while not self._command_queue.empty():
@@ -144,42 +163,46 @@ class ModbusWorker(QThread):
                 self.log_message.emit(f"Command execution error ({action}): {e}")
 
     def _do_connect(self):
-        if not self.host:
-            self.connection_status_changed.emit(False, "No IP address specified")
+        if not self.serial_port:
+            self.connection_status_changed.emit(False, "No serial port specified")
             return
 
         self._cleanup_client()
-        self.log_message.emit(f"Connecting to Modbus TCP slave at {self.host}:{self.port} (Slave ID: {self.slave_id})...")
+        target = f"{self.serial_port} @ {self.baudrate} 8N1"
+        self.log_message.emit(f"Opening Modbus RTU serial slave on {target} (Slave ID: {self.slave_id})...")
 
         try:
-            self._client = ModbusTcpClient(
-                host=self.host,
-                port=self.port,
-                timeout=1.0,
+            self._client = ModbusSerialClient(
+                port=self.serial_port,
+                baudrate=self.baudrate,
+                bytesize=8,
+                parity="N",
+                stopbits=1,
+                timeout=0.5,
                 retries=1
             )
             connected = self._client.connect()
             if connected:
                 self._connected = True
-                self.connection_status_changed.emit(True, f"Connected ({self.host}:{self.port})")
-                self.log_message.emit(f"Successfully connected to {self.host}:{self.port}.")
+                self.connection_status_changed.emit(True, f"Connected ({target})")
+                self.log_message.emit(f"Serial port {target} opened successfully.")
             else:
                 self._connected = False
-                self.connection_status_changed.emit(False, f"Connection failed ({self.host}:{self.port})")
+                self.connection_status_changed.emit(False, f"Connection failed ({target})")
                 if self._user_wants_connected:
-                    self.log_message.emit(f"TCP connection attempt failed. Will retry in {self.reconnect_interval_sec}s...")
+                    self.log_message.emit(f"Serial port open failed (check cable / permissions on dialout group). Will retry in {self.reconnect_interval_sec}s...")
         except Exception as e:
             self._connected = False
             self.connection_status_changed.emit(False, f"Connection error: {e}")
             if self._user_wants_connected:
-                self.log_message.emit(f"Exception connecting to {self.host}:{self.port}: {e}. Retrying...")
+                self.log_message.emit(f"Exception opening {target}: {e}. Retrying...")
 
     def _do_disconnect(self):
         if self._connected or self._client:
             self._cleanup_client()
             self._connected = False
             self.connection_status_changed.emit(False, "Disconnected")
-            self.log_message.emit("Disconnected from Modbus TCP server.")
+            self.log_message.emit("Serial port closed.")
 
     def _handle_disconnect(self, reason: str):
         self._cleanup_client()

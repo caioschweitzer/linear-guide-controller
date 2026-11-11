@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Linear Guide Actuator - Modbus TCP Supervisory (SCADA) UI Entry Point
+Linear Guide Actuator - Modbus RTU (USB Serial) Supervisory (SCADA) UI Entry Point
 """
 import sys
 from PyQt6.QtWidgets import QApplication

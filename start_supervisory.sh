@@ -50,60 +50,22 @@ if [ -z "$QT_QPA_PLATFORM" ] && [ -n "$WAYLAND_DISPLAY" ]; then
 fi
 
 # ==============================================================================
-# Configuração de IP na Interface de Rede (Wi-Fi / Ethernet) para falar com o ESP32
+# Verificação de Portas Seriais USB (Modbus RTU via USART USB)
 # ==============================================================================
-TARGET_IP="192.168.1.50/24"
-ESP_IP="192.168.1.100"
-
-echo "🌐 Verificando IP estático na faixa 192.168.1.x no PC (alvo ESP32: $ESP_IP)..."
-
-# 1. Detecta a interface Wi-Fi
-WIFI_IFACE=$(nmcli -t -f DEVICE,TYPE device status 2>/dev/null | grep ":wifi" | cut -d: -f1 | head -n 1 || true)
-if [ -z "$WIFI_IFACE" ]; then
-    WIFI_IFACE=$(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | grep -E '^(wl|wlan)' | head -n 1 || true)
-fi
-
-# 2. Se houver interface Wi-Fi, garante que ela possui um IP na faixa 192.168.1.x
-if [ -n "$WIFI_IFACE" ]; then
-    if ip -4 addr show dev "$WIFI_IFACE" 2>/dev/null | grep -q "192.168.1\."; then
-        CURRENT_IP=$(ip -4 addr show dev "$WIFI_IFACE" | grep "192.168.1\." | awk '{print $2}')
-        echo "✅ Interface Wi-Fi ($WIFI_IFACE) já possui IP na faixa correta: $CURRENT_IP"
-    else
-        echo "⚙️ Configurando IP estático $TARGET_IP na interface Wi-Fi ($WIFI_IFACE)..."
-        # Tenta via NetworkManager na conexão ativa (não requer sudo se gerenciado pelo usuário)
-        ACTIVE_CON=$(nmcli -t -f NAME,DEVICE connection show --active 2>/dev/null | grep ":$WIFI_IFACE" | cut -d: -f1 | head -n 1 || true)
-        if [ -n "$ACTIVE_CON" ]; then
-            nmcli connection modify "$ACTIVE_CON" +ipv4.addresses "$TARGET_IP" 2>/dev/null || true
-        fi
-
-        # Adiciona diretamente o alias de IP na interface se ainda não estiver presente
-        if ! ip -4 addr show dev "$WIFI_IFACE" 2>/dev/null | grep -q "192.168.1\."; then
-            if [ "$(id -u)" -eq 0 ]; then
-                ip addr add "$TARGET_IP" dev "$WIFI_IFACE" 2>/dev/null || true
-            else
-                sudo ip addr add "$TARGET_IP" dev "$WIFI_IFACE" 2>/dev/null || true
-            fi
-        fi
-
-        if ip -4 addr show dev "$WIFI_IFACE" 2>/dev/null | grep -q "192.168.1\."; then
-            echo "✅ IP $TARGET_IP atribuído com sucesso à interface Wi-Fi $WIFI_IFACE!"
+echo "🔌 Verificando portas seriais USB disponíveis..."
+SERIAL_PORTS=$(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null || true)
+if [ -n "$SERIAL_PORTS" ]; then
+    echo "✅ Porta(s) serial(is) detectada(s):"
+    for p in $SERIAL_PORTS; do
+        if [ -r "$p" ] && [ -w "$p" ]; then
+            echo "   - $p (Leitura/Escrita OK)"
         else
-            echo "⚠️ Não foi possível adicionar $TARGET_IP automaticamente em $WIFI_IFACE."
-            echo "   Para aplicar manualmente, execute: sudo ip addr add $TARGET_IP dev $WIFI_IFACE"
+            echo "   - $p (⚠️ Sem permissão de leitura/escrita. Execute: sudo usermod -aG dialout $USER)"
         fi
-    fi
-fi
-
-# 3. Verifica também interface Ethernet caso esteja plugado via cabo
-ETH_IFACE=$(nmcli -t -f DEVICE,TYPE device status 2>/dev/null | grep ":ethernet" | grep -v "veth\|docker\|br-" | cut -d: -f1 | head -n 1 || true)
-if [ -n "$ETH_IFACE" ] && [ -d "/sys/class/net/$ETH_IFACE" ]; then
-    if ! ip -4 addr show dev "$ETH_IFACE" 2>/dev/null | grep -q "192.168.1\."; then
-        if [ "$(id -u)" -eq 0 ]; then
-            ip addr add "$TARGET_IP" dev "$ETH_IFACE" 2>/dev/null || true
-        else
-            sudo ip addr add "$TARGET_IP" dev "$ETH_IFACE" 2>/dev/null || true
-        fi
-    fi
+    done
+else
+    echo "ℹ️ Nenhuma porta /dev/ttyUSB* ou /dev/ttyACM* encontrada no momento."
+    echo "   Conecte o cabo USB-C do ESP32 ao computador para estabelecer a conexão Modbus RTU."
 fi
 
 echo "🚀 Iniciando Supervisório da Guia Linear..."

@@ -32,18 +32,18 @@ def test_ieee754_float_conversion_roundtrip():
 
 
 def test_modbus_worker_connection_params():
-    """Test setting Modbus TCP connection parameters."""
+    """Test setting Modbus RTU serial connection parameters."""
     worker = ModbusWorker()
-    worker.set_connection_params("192.168.1.50", port=5020, slave_id=2)
-    assert worker.host == "192.168.1.50"
-    assert worker.port == 5020
+    worker.set_connection_params("/dev/ttyUSB1", baudrate=57600, slave_id=2)
+    assert worker.serial_port == "/dev/ttyUSB1"
+    assert worker.baudrate == 57600
     assert worker.slave_id == 2
 
 
 def test_modbus_worker_command_queue(qapp):
     """Test ModbusWorker queueing actions and signal slots."""
     worker = ModbusWorker()
-    worker.set_connection_params("127.0.0.1", port=502, slave_id=1)
+    worker.set_connection_params("/dev/ttyUSB0", baudrate=115200, slave_id=1)
 
     # Queue setpoint, commands, and PID gains
     worker.queue_setpoint(200.0)
