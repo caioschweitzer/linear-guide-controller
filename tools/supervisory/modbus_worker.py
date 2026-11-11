@@ -273,6 +273,7 @@ class ModbusWorker(QThread):
         # 1. Read Input Registers 0x0000 to 0x0008 (9 registers: Pos, Vel, Duty, State, Burst Status, Burst Count)
         res_in = self._client.read_input_registers(address=0x0000, count=9, slave=self.slave_id)
         if hasattr(res_in, "isError") and res_in.isError():
+            self.log_message.emit(f"⚠️ Erro ao ler Input Registers (0x0000-0x0008): {res_in}")
             return None
 
         pos = registers_to_float(res_in.registers[0], res_in.registers[1])

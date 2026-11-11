@@ -15,6 +15,10 @@ typedef int esp_err_t;
 extern "C" {
 #endif
 
+// Wi-Fi Default Configuration
+#define WIFI_SSID_DEFAULT       "cerberus"
+#define WIFI_PASS_DEFAULT       "asenhaehsecreta"
+
 // Modbus Command Register Flags
 #define CMD_NONE                0
 #define CMD_START               1

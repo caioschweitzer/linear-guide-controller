@@ -200,6 +200,73 @@ class StatusBadge(QLabel):
         self.setText(f"STATE: {text}")
         self.set_colors(fg, bg)
 
+class DigitalDisplayCard(QFrame):
+    """Modern digital telemetry meter card displaying a metric value and engineering unit."""
+
+    def __init__(self, title: str, unit: str = "", accent_color: str = "#89B4FA", parent=None):
+        super().__init__(parent)
+        self.title_text = title
+        self.unit_text = unit
+        self.accent_color = accent_color
+        self._current_color = accent_color
+
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setStyleSheet(f"""
+            DigitalDisplayCard {{
+                background-color: #181825;
+                border: 1px solid #313244;
+                border-top: 3px solid {accent_color};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(2)
+
+        # Title Label
+        self.title_label = QLabel(title.upper())
+        self.title_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.title_label.setStyleSheet("color: #A6ADC8; background: transparent; border: none;")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.title_label)
+
+        # Value & Unit Row
+        val_unit_layout = QHBoxLayout()
+        val_unit_layout.setSpacing(4)
+        val_unit_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.value_label = QLabel("--")
+        self.value_label.setFont(QFont("Consolas", 18, QFont.Weight.Bold))
+        self.value_label.setStyleSheet(f"color: {accent_color}; background: transparent; border: none;")
+        self.value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        val_unit_layout.addWidget(self.value_label)
+
+        if unit:
+            self.unit_label = QLabel(unit)
+            self.unit_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Normal))
+            self.unit_label.setStyleSheet("color: #6C7086; background: transparent; border: none;")
+            self.unit_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
+            val_unit_layout.addWidget(self.unit_label)
+        else:
+            self.unit_label = None
+
+        layout.addLayout(val_unit_layout)
+
+    def set_value(self, val_text: str, custom_color: str | None = None):
+        self.value_label.setText(val_text)
+        color = custom_color if custom_color else self.accent_color
+        if color != self._current_color:
+            self._current_color = color
+            self.value_label.setStyleSheet(f"color: {color}; background: transparent; border: none;")
+
+    def get_value(self) -> str:
+        return self.value_label.text()
+
+    def get_unit(self) -> str:
+        return self.unit_label.text() if self.unit_label else ""
+
 
 class SupervisoryMainWindow(QMainWindow):
 
@@ -235,6 +302,7 @@ class SupervisoryMainWindow(QMainWindow):
 
         # Build UI layout
         self.init_ui()
+        self.append_log("📡 Supervisório pronto (Modbus TCP). Conecte-se à rede Wi-Fi 'cerberus' e configure o IP do ESP32.")
 
     def init_ui(self):
         main_widget = QWidget()
@@ -279,6 +347,8 @@ class SupervisoryMainWindow(QMainWindow):
         # IP Address Input LineEdit
         layout.addWidget(QLabel("IP Addr:"))
         self.ip_input = QLineEdit("192.168.1.100")
+        self.ip_input.setPlaceholderText("ex: 192.168.1.100")
+        self.ip_input.setToolTip("Endereço IP Wi-Fi do ESP32 (verifique o console USB ao iniciar)")
         self.ip_input.setMinimumWidth(130)
         layout.addWidget(self.ip_input)
 
@@ -455,6 +525,55 @@ class SupervisoryMainWindow(QMainWindow):
 
     def _create_right_telemetry_panel(self) -> QVBoxLayout:
         layout = QVBoxLayout()
+        layout.setSpacing(10)
+
+        # 1. Top Real-Time Digital Telemetry Display Cards
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(8)
+
+        self.card_pos = DigitalDisplayCard("Posição Atual", unit="mm", accent_color="#A6E3A1")
+        self.card_sp = DigitalDisplayCard("Setpoint Alvo", unit="mm", accent_color="#89B4FA")
+        self.card_err = DigitalDisplayCard("Erro (SP - PV)", unit="mm", accent_color="#F9E2AF")
+        self.card_vel = DigitalDisplayCard("Velocidade", unit="mm/s", accent_color="#FAB387")
+        self.card_duty = DigitalDisplayCard("Esforço PWM", unit="%", accent_color="#CBA6F7")
+
+        cards_layout.addWidget(self.card_pos)
+        cards_layout.addWidget(self.card_sp)
+        cards_layout.addWidget(self.card_err)
+        cards_layout.addWidget(self.card_vel)
+        cards_layout.addWidget(self.card_duty)
+
+        layout.addLayout(cards_layout)
+
+        # 2. Graph Controls Toolbar (Max Points SpinBox & Clear Button)
+        graph_toolbar = QHBoxLayout()
+        graph_toolbar.setSpacing(10)
+
+        lbl_buffer = QLabel("Buffer dos Gráficos:")
+        lbl_buffer.setStyleSheet("color: #A6ADC8; font-weight: bold;")
+        graph_toolbar.addWidget(lbl_buffer)
+
+        self.spin_max_points = QSpinBox()
+        self.spin_max_points.setRange(50, 3000)
+        self.spin_max_points.setValue(self.max_points)
+        self.spin_max_points.setSingleStep(50)
+        self.spin_max_points.setSuffix(" pts")
+        self.spin_max_points.setToolTip("Quantidade máxima de pontos mantidos no histórico dos gráficos (FIFO circular)")
+        self.spin_max_points.valueChanged.connect(self.on_max_points_changed)
+        graph_toolbar.addWidget(self.spin_max_points)
+
+        self.btn_clear_graphs = QPushButton("🗑️ Limpar Gráficos")
+        self.btn_clear_graphs.setToolTip("Limpar histórico e traçados dos gráficos")
+        self.btn_clear_graphs.clicked.connect(self.clear_graphs)
+        graph_toolbar.addWidget(self.btn_clear_graphs)
+
+        graph_toolbar.addStretch()
+
+        self.lbl_points_info = QLabel(f"Pontos exibidos: 0 / {self.max_points}")
+        self.lbl_points_info.setStyleSheet("color: #6C7086; font-size: 11px;")
+        graph_toolbar.addWidget(self.lbl_points_info)
+
+        layout.addLayout(graph_toolbar)
 
         # Configure PyQtGraph Dark Theme
         pg.setConfigOption('background', '#181825')
@@ -557,6 +676,19 @@ class SupervisoryMainWindow(QMainWindow):
         self.curve_velocity.setData(list(self.time_history), list(self.velocity_history))
         self.curve_duty.setData(list(self.time_history), list(self.duty_history))
 
+        # Update Digital Telemetry Display Cards
+        error = sp - pos
+        self.card_pos.set_value(f"{pos:.2f}")
+        self.card_sp.set_value(f"{sp:.2f}")
+        err_color = "#A6E3A1" if abs(error) <= 0.1 else "#F9E2AF"
+        self.card_err.set_value(f"{error:+.2f}", custom_color=err_color)
+        self.card_vel.set_value(f"{vel:.1f}")
+        self.card_duty.set_value(f"{duty:+.1f}")
+
+        # Update points count label
+        if hasattr(self, 'lbl_points_info'):
+            self.lbl_points_info.setText(f"Pontos exibidos: {len(self.time_history)} / {self.max_points}")
+
         # Update Machine State Badge
         self.state_badge.update_machine_state(state)
 
@@ -624,6 +756,40 @@ class SupervisoryMainWindow(QMainWindow):
             self.modbus_worker.queue_open_loop_test()
             self.append_log("🚀 Iniciado ensaio de malha aberta (100% PWM até 536 mm / 80% do curso).")
 
+    @pyqtSlot(int)
+    def on_max_points_changed(self, new_max: int):
+        self.max_points = new_max
+        self.time_history = deque(self.time_history, maxlen=new_max)
+        self.setpoint_history = deque(self.setpoint_history, maxlen=new_max)
+        self.position_history = deque(self.position_history, maxlen=new_max)
+        self.velocity_history = deque(self.velocity_history, maxlen=new_max)
+        self.duty_history = deque(self.duty_history, maxlen=new_max)
+
+        # Refresh plots with resized data
+        self.curve_setpoint.setData(list(self.time_history), list(self.setpoint_history))
+        self.curve_position.setData(list(self.time_history), list(self.position_history))
+        self.curve_velocity.setData(list(self.time_history), list(self.velocity_history))
+        self.curve_duty.setData(list(self.time_history), list(self.duty_history))
+
+        if hasattr(self, 'lbl_points_info'):
+            self.lbl_points_info.setText(f"Pontos exibidos: {len(self.time_history)} / {self.max_points}")
+
+    def clear_graphs(self):
+        self.time_history.clear()
+        self.setpoint_history.clear()
+        self.position_history.clear()
+        self.velocity_history.clear()
+        self.duty_history.clear()
+
+        self.curve_setpoint.setData([], [])
+        self.curve_position.setData([], [])
+        self.curve_velocity.setData([], [])
+        self.curve_duty.setData([], [])
+
+        if hasattr(self, 'lbl_points_info'):
+            self.lbl_points_info.setText(f"Pontos exibidos: 0 / {self.max_points}")
+        self.append_log("🧹 Gráficos de telemetria limpos pelo operador.")
+
     @pyqtSlot(list)
     def on_burst_data_ready(self, samples: List[Dict[str, Any]]):
         self.last_burst_samples = samples
@@ -631,6 +797,12 @@ class SupervisoryMainWindow(QMainWindow):
         self.append_log(f"📊 Recebidas {len(samples)} amostras de malha aberta do ESP32.")
 
         if samples:
+            # Auto-expand buffer capacity if incoming burst exceeds current max_points
+            if len(samples) > self.max_points:
+                if len(samples) > self.spin_max_points.maximum():
+                    self.spin_max_points.setMaximum(len(samples))
+                self.spin_max_points.setValue(len(samples))
+
             times = [s["time_s"] for s in samples]
             positions = [s["position_mm"] for s in samples]
             velocities = [s["velocity_mm_s"] for s in samples]
@@ -653,6 +825,9 @@ class SupervisoryMainWindow(QMainWindow):
             self.curve_position.setData(list(self.time_history), list(self.position_history))
             self.curve_velocity.setData(list(self.time_history), list(self.velocity_history))
             self.curve_duty.setData(list(self.time_history), list(self.duty_history))
+
+            if hasattr(self, 'lbl_points_info'):
+                self.lbl_points_info.setText(f"Pontos exibidos: {len(self.time_history)} / {self.max_points}")
 
             # Prompt for file save
             filepath, _ = QFileDialog.getSaveFileName(

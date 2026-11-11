@@ -15,4 +15,4 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/esp-modbus: '*'
-  espressif/w5500: '*'
+  # espressif/w5500: '*' (Replaced by built-in ESP32 Wi-Fi station)

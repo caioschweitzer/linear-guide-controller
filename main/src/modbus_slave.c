@@ -5,32 +5,54 @@
 #include <string.h>
 
 #ifndef HOST_TEST
-#include "driver/gpio.h"
-#include "driver/spi_master.h"
-#include "esp_eth.h"
-#include "esp_eth_mac_w5500.h"
-#include "esp_eth_phy_w5500.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_wifi.h"
+#include "nvs_flash.h"
 #include "mbcontroller.h"
 
 #define MB_TCP_PORT_NUMBER 502
 #define MB_SLAVE_ADDR 1
 
-#define ETH_SPI_HOST SPI2_HOST
-#define ETH_SPI_SCLK_GPIO 18
-#define ETH_SPI_MOSI_GPIO 8
-#define ETH_SPI_MISO_GPIO 10
-#define ETH_SPI_CS_GPIO 21
-#define ETH_SPI_RST_GPIO 9
-#define ETH_SPI_INT_GPIO 17
-#define ETH_SPI_CLOCK_MHZ 5
-
-// Static IP configuration (disables DHCP client)
-#define STATIC_IP "192.168.1.100"
+// Static IP configuration (disables DHCP client on ESP32 Wi-Fi)
+#define STATIC_IP      "192.168.1.100"
 #define STATIC_NETMASK "255.255.255.0"
-#define STATIC_GW "192.168.1.1"
+#define STATIC_GW      "192.168.1.1"
+
+static const char *TAG = "WIFI_MB";
+static esp_netif_t *s_sta_netif = NULL;
+static bool s_wifi_connected = false;
+
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data) {
+  if (event_base == WIFI_EVENT) {
+    if (event_id == WIFI_EVENT_STA_START) {
+      ESP_LOGI(TAG, "Wi-Fi Station started, connecting to SSID '%s'...", WIFI_SSID_DEFAULT);
+      esp_wifi_connect();
+    } else if (event_id == WIFI_EVENT_STA_CONNECTED) {
+      s_wifi_connected = true;
+      ESP_LOGI(TAG, "=================================================");
+      ESP_LOGI(TAG, " Wi-Fi Associated to AP: '%s'", WIFI_SSID_DEFAULT);
+      ESP_LOGI(TAG, " Static IP   : %s", STATIC_IP);
+      ESP_LOGI(TAG, " Netmask     : %s", STATIC_NETMASK);
+      ESP_LOGI(TAG, " Gateway     : %s", STATIC_GW);
+      ESP_LOGI(TAG, " Modbus TCP Slave listening on port %d", MB_TCP_PORT_NUMBER);
+      ESP_LOGI(TAG, "=================================================");
+    } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+      s_wifi_connected = false;
+      wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
+      ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d)! Reconnecting...", disconn ? disconn->reason : 0);
+      esp_wifi_connect();
+    }
+  } else if (event_base == IP_EVENT) {
+    if (event_id == IP_EVENT_STA_GOT_IP) {
+      ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+      s_wifi_connected = true;
+      ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP: " IPSTR, IP2STR(&event->ip_info.ip));
+    }
+  }
+}
 #endif
 
 // Internal buffers mapped to Modbus stack
@@ -57,27 +79,7 @@ static float registers_to_float(uint16_t hi, uint16_t lo) {
   return result;
 }
 
-#ifndef HOST_TEST
-static void eth_event_handler(void *arg, esp_event_base_t event_base,
-                              int32_t event_id, void *event_data) {
-  if (event_base == ETH_EVENT) {
-    if (event_id == ETHERNET_EVENT_CONNECTED) {
-      ESP_LOGI("ETH", "Ethernet Link Up");
-    } else if (event_id == ETHERNET_EVENT_DISCONNECTED) {
-      ESP_LOGI("ETH", "Ethernet Link Down");
-    }
-  } else if (event_base == IP_EVENT) {
-    if (event_id == IP_EVENT_ETH_GOT_IP) {
-      ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-      ESP_LOGI("ETH",
-               "Static IP assigned: " IPSTR " (Netmask: " IPSTR ", GW: " IPSTR
-               ")",
-               IP2STR(&event->ip_info.ip), IP2STR(&event->ip_info.netmask),
-               IP2STR(&event->ip_info.gw));
-    }
-  }
-}
-#endif
+
 
 esp_err_t modbus_slave_init(void) {
   // Populate default holding register values
@@ -92,108 +94,76 @@ esp_err_t modbus_slave_init(void) {
                      &g_modbus_holding_reg.kd_lo);
   g_modbus_holding_reg.burst_read_index = 0;
 #ifndef HOST_TEST
-
   // 1. Re-enable console ASCII logging on UART0 / USB-C
   esp_log_level_set("*", ESP_LOG_INFO);
 
-  // 2. Hardware Reset WIZ550io and allow 500ms for internal MCU auto-config
-  gpio_config_t rst_gpio_conf = {
-      .pin_bit_mask = (1ULL << ETH_SPI_RST_GPIO),
-      .mode = GPIO_MODE_OUTPUT,
-      .pull_up_en = GPIO_PULLUP_DISABLE,
-      .pull_down_en = GPIO_PULLDOWN_DISABLE,
-      .intr_type = GPIO_INTR_DISABLE,
-  };
-  gpio_config(&rst_gpio_conf);
-  gpio_set_level(ETH_SPI_RST_GPIO, 0); // Assert reset (LOW)
-  vTaskDelay(pdMS_TO_TICKS(50));
-  gpio_set_level(ETH_SPI_RST_GPIO, 1); // De-assert reset (HIGH)
-  vTaskDelay(pdMS_TO_TICKS(500));      // Wait 500ms for WIZ550io RDY
+  // 2. Initialize NVS (required for Wi-Fi RF calibration and configuration)
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    ret = nvs_flash_init();
+  }
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize NVS: %s", esp_err_to_name(ret));
+    return ret;
+  }
 
-  // 3. Initialize SPI Bus for WIZ550io (W5500)
-  spi_bus_config_t buscfg = {
-      .miso_io_num = ETH_SPI_MISO_GPIO,
-      .mosi_io_num = ETH_SPI_MOSI_GPIO,
-      .sclk_io_num = ETH_SPI_SCLK_GPIO,
-      .quadwp_io_num = -1,
-      .quadhd_io_num = -1,
-  };
-  esp_err_t err = spi_bus_initialize(ETH_SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
-  // 4. Configure W5500 MAC/PHY Driver
-  spi_device_interface_config_t devcfg = {
-      .command_bits = 16,
-      .address_bits = 8,
-      .mode = 0,
-      .clock_speed_hz = ETH_SPI_CLOCK_MHZ * 1000 * 1000,
-      .spics_io_num = ETH_SPI_CS_GPIO,
-      .queue_size = 20,
-  };
+  // 3. Initialize TCP/IP stack and default event loop
+  ESP_ERROR_CHECK(esp_netif_init());
+  ESP_ERROR_CHECK(esp_event_loop_create_default());
+  s_sta_netif = esp_netif_create_default_wifi_sta();
 
-  eth_w5500_config_t w5500_config =
-      ETH_W5500_DEFAULT_CONFIG(ETH_SPI_HOST, &devcfg);
-  w5500_config.base.int_gpio_num = ETH_SPI_INT_GPIO;
-
-  eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
-  esp_eth_mac_t *mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
-
-  eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
-  phy_config.reset_gpio_num = -1; // Reset managed manually above
-  esp_eth_phy_t *phy = esp_eth_phy_new_w5500(&phy_config);
-
-  esp_eth_config_t eth_config = ETH_DEFAULT_CONFIG(mac, phy);
-  esp_eth_handle_t eth_handle = NULL;
-  err = esp_eth_driver_install(&eth_config, &eth_handle);
-  if (err != ESP_OK)
-    return err;
-
-  // 4. Attach Ethernet to esp_netif TCP/IP stack
-  esp_netif_init();
-  esp_event_loop_create_default();
-  esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
-  esp_netif_t *eth_netif = esp_netif_new(&netif_cfg);
-
-  esp_eth_netif_glue_handle_t glue = esp_eth_new_netif_glue(eth_handle);
-  err = esp_netif_attach(eth_netif, glue);
-  if (err != ESP_OK)
-    return err;
-
-  // 4a. Stop DHCP client and apply static IP configuration
-  err = esp_netif_dhcpc_stop(eth_netif);
-  if (err != ESP_OK && err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
-    ESP_LOGE("ETH", "Failed to stop DHCP client: %s", esp_err_to_name(err));
-    return err;
+  // 3a. Disable DHCP client on Wi-Fi STA and apply static IP
+  esp_err_t ip_err = esp_netif_dhcpc_stop(s_sta_netif);
+  if (ip_err != ESP_OK && ip_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
+    ESP_LOGW(TAG, "esp_netif_dhcpc_stop notice: %s", esp_err_to_name(ip_err));
   }
   esp_netif_ip_info_t ip_info;
   memset(&ip_info, 0, sizeof(ip_info));
   ip_info.ip.addr = esp_ip4addr_aton(STATIC_IP);
   ip_info.netmask.addr = esp_ip4addr_aton(STATIC_NETMASK);
   ip_info.gw.addr = esp_ip4addr_aton(STATIC_GW);
-  err = esp_netif_set_ip_info(eth_netif, &ip_info);
-  if (err != ESP_OK) {
-    ESP_LOGE("ETH", "Failed to set static IP: %s", esp_err_to_name(err));
-    return err;
+  ip_err = esp_netif_set_ip_info(s_sta_netif, &ip_info);
+  if (ip_err != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to set static IP: %s", esp_err_to_name(ip_err));
+  } else {
+    ESP_LOGI(TAG, "Static IP configured on Wi-Fi STA: %s (Netmask: %s, GW: %s)",
+             STATIC_IP, STATIC_NETMASK, STATIC_GW);
   }
-  ESP_LOGI("ETH", "Static IP configured: %s / %s (GW: %s)", STATIC_IP,
-           STATIC_NETMASK, STATIC_GW);
 
-  esp_event_handler_instance_register(ETH_EVENT, ESP_EVENT_ANY_ID,
-                                      &eth_event_handler, NULL, NULL);
-  esp_event_handler_instance_register(IP_EVENT, IP_EVENT_ETH_GOT_IP,
-                                      &eth_event_handler, NULL, NULL);
+  // 4. Initialize ESP32 Wi-Fi in Station mode
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-  err = esp_eth_start(eth_handle);
-  if (err != ESP_OK)
-    return err;
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(
+      WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(
+      IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
+
+  wifi_config_t wifi_config = {
+      .sta = {
+          .ssid = WIFI_SSID_DEFAULT,
+          .password = WIFI_PASS_DEFAULT,
+          .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+          .pmf_cfg = {
+              .capable = true,
+              .required = false,
+          },
+      },
+  };
+  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+  ESP_ERROR_CHECK(esp_wifi_start());
 
   // 5. Initialize Modbus TCP Slave Controller
   mb_communication_info_t comm_info = {.tcp_opts = {.port = MB_TCP_PORT_NUMBER,
                                                     .mode = MB_TCP,
                                                     .addr_type = MB_IPV4,
                                                     .ip_addr_table = NULL,
-                                                    .ip_netif_ptr = eth_netif,
+                                                    .ip_netif_ptr = s_sta_netif,
                                                     .uid = MB_SLAVE_ADDR}};
 
-  err = mbc_slave_create_tcp(&comm_info, &s_mbc_handle);
+  esp_err_t err = mbc_slave_create_tcp(&comm_info, &s_mbc_handle);
   if (err != ESP_OK)
     return err;
 
