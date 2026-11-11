@@ -167,11 +167,169 @@ QSlider::handle:horizontal {
 }
 """
 
+# Light Theme QSS Stylesheet
+LIGHT_STYLESHEET = """
+QMainWindow {
+    background-color: #F0F2F6;
+}
+QWidget {
+    background-color: #F8F9FB;
+    color: #24273A;
+    font-family: "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+    font-size: 13px;
+}
+QGroupBox {
+    border: 1px solid #CCD0DA;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    font-weight: bold;
+    color: #1E66F5;
+    background-color: #FFFFFF;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 2px 8px;
+    background-color: #E6E9EF;
+    border-radius: 4px;
+    color: #1E66F5;
+}
+QPushButton {
+    background-color: #E6E9EF;
+    color: #24273A;
+    border: 1px solid #BCC0CC;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #DCE0E8;
+    border-color: #1E66F5;
+}
+QPushButton:pressed {
+    background-color: #CCD0DA;
+}
+QPushButton#theme_btn {
+    background-color: #E6E9EF;
+    color: #24273A;
+    border: 1px solid #BCC0CC;
+    font-size: 12px;
+    padding: 6px 10px;
+}
+QPushButton#connect_btn {
+    background-color: #2E7D32;
+    color: #FFFFFF;
+}
+QPushButton#connect_btn:hover {
+    background-color: #388E3C;
+}
+QPushButton#disconnect_btn {
+    background-color: #C62828;
+    color: #FFFFFF;
+}
+QPushButton#estop_btn {
+    background-color: #D32F2F;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 900;
+    border: 2px solid #FF5252;
+    border-radius: 8px;
+    padding: 12px;
+}
+QPushButton#estop_btn:hover {
+    background-color: #E53935;
+    border-color: #FF8A80;
+}
+QPushButton#start_btn {
+    background-color: #1565C0;
+    color: #FFFFFF;
+}
+QPushButton#start_btn:hover {
+    background-color: #1976D2;
+}
+QPushButton#home_btn {
+    background-color: #0288D1;
+    color: #FFFFFF;
+}
+QPushButton#home_btn:hover {
+    background-color: #039BE5;
+}
+QPushButton#pid_btn {
+    background-color: #7B1FA2;
+    color: #FFFFFF;
+}
+QPushButton#pid_btn:hover {
+    background-color: #8E24AA;
+}
+QPushButton#openloop_btn {
+    background-color: #E65100;
+    color: #FFFFFF;
+    font-weight: bold;
+    padding: 8px;
+}
+QPushButton#openloop_btn:hover {
+    background-color: #F57C00;
+}
+QPushButton#openloop_btn:disabled {
+    background-color: #E6E9EF;
+    color: #9CA0B0;
+    border-color: #DCE0E8;
+}
+QPushButton#export_btn {
+    background-color: #00796B;
+    color: #FFFFFF;
+}
+QPushButton#export_btn:hover {
+    background-color: #00897B;
+}
+QPushButton#export_btn:disabled {
+    background-color: #E6E9EF;
+    color: #9CA0B0;
+}
+QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox {
+    background-color: #FFFFFF;
+    border: 1px solid #CCD0DA;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #24273A;
+}
+QComboBox::drop-down {
+    border: none;
+}
+QTextEdit {
+    background-color: #FFFFFF;
+    border: 1px solid #CCD0DA;
+    border-radius: 6px;
+    color: #313244;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 12px;
+}
+QSlider::groove:horizontal {
+    border: 1px solid #CCD0DA;
+    height: 8px;
+    background: #E6E9EF;
+    border-radius: 4px;
+}
+QSlider::sub-page:horizontal {
+    background: #1E66F5;
+    border-radius: 4px;
+}
+QSlider::handle:horizontal {
+    background: #7287FD;
+    border: 1px solid #1E66F5;
+    width: 18px;
+    margin-top: -6px;
+    margin-bottom: -6px;
+    border-radius: 9px;
+}
+"""
+
 
 class StatusBadge(QLabel):
     """Custom pill badge widget for visual status rendering."""
 
-    STATE_MAP = {
+    STATE_MAP_DARK = {
         0: ("IDLE", "#6C7086", "#181825"),
         1: ("MOVING", "#A6E3A1", "#1E3A29"),
         2: ("EMERGENCY", "#F38BA8", "#3A1E24"),
@@ -179,11 +337,24 @@ class StatusBadge(QLabel):
         4: ("OPEN_LOOP", "#FAB387", "#3A281E")
     }
 
+    STATE_MAP_LIGHT = {
+        0: ("IDLE", "#5C5F77", "#E6E9EF"),
+        1: ("MOVING", "#1B8A38", "#E8F5E9"),
+        2: ("EMERGENCY", "#D20F39", "#FFEBEE"),
+        3: ("HOMING", "#1E66F5", "#E3F2FD"),
+        4: ("OPEN_LOOP", "#DF8E1D", "#FFF3E0")
+    }
+
     def __init__(self, text="DISCONNECTED", text_color="#CDD6F4", bg_color="#313244", parent=None):
         super().__init__(text, parent)
+        self.current_theme = "dark"
+        self._last_state = 0
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.set_colors(text_color, bg_color)
         self.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+
+    def set_theme(self, theme: str):
+        self.current_theme = theme
 
     def set_colors(self, text_color: str, bg_color: str):
         self.setStyleSheet(f"""
@@ -198,7 +369,9 @@ class StatusBadge(QLabel):
         """)
 
     def update_machine_state(self, state_code: int):
-        text, fg, bg = self.STATE_MAP.get(state_code, (f"UNKNOWN ({state_code})", "#F9E2AF", "#3A3524"))
+        self._last_state = state_code
+        state_map = self.STATE_MAP_LIGHT if self.current_theme == "light" else self.STATE_MAP_DARK
+        text, fg, bg = state_map.get(state_code, (f"UNKNOWN ({state_code})", "#F9E2AF", "#3A3524"))
         self.setText(f"STATE: {text}")
         self.set_colors(fg, bg)
 
@@ -211,17 +384,9 @@ class DigitalDisplayCard(QFrame):
         self.unit_text = unit
         self.accent_color = accent_color
         self._current_color = accent_color
+        self.current_theme = "dark"
 
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(f"""
-            DigitalDisplayCard {{
-                background-color: #181825;
-                border: 1px solid #313244;
-                border-top: 3px solid {accent_color};
-                border-radius: 8px;
-                padding: 4px;
-            }}
-        """)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
@@ -230,7 +395,6 @@ class DigitalDisplayCard(QFrame):
         # Title Label
         self.title_label = QLabel(title.upper())
         self.title_label.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        self.title_label.setStyleSheet("color: #A6ADC8; background: transparent; border: none;")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.title_label)
 
@@ -241,14 +405,12 @@ class DigitalDisplayCard(QFrame):
 
         self.value_label = QLabel("--")
         self.value_label.setFont(QFont("Consolas", 18, QFont.Weight.Bold))
-        self.value_label.setStyleSheet(f"color: {accent_color}; background: transparent; border: none;")
         self.value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         val_unit_layout.addWidget(self.value_label)
 
         if unit:
             self.unit_label = QLabel(unit)
             self.unit_label.setFont(QFont("Segoe UI", 10, QFont.Weight.Normal))
-            self.unit_label.setStyleSheet("color: #6C7086; background: transparent; border: none;")
             self.unit_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
             val_unit_layout.addWidget(self.unit_label)
         else:
@@ -256,12 +418,35 @@ class DigitalDisplayCard(QFrame):
 
         layout.addLayout(val_unit_layout)
 
+        self.set_theme("dark")
+
+    def set_theme(self, theme: str):
+        self.current_theme = theme
+        bg = "#FFFFFF" if theme == "light" else "#181825"
+        border = "#CCD0DA" if theme == "light" else "#313244"
+        title_color = "#5C5F77" if theme == "light" else "#A6ADC8"
+        unit_color = "#7C7F93" if theme == "light" else "#6C7086"
+        self.setStyleSheet(f"""
+            DigitalDisplayCard {{
+                background-color: {bg};
+                border: 1px solid {border};
+                border-top: 3px solid {self._current_color};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+        """)
+        self.title_label.setStyleSheet(f"color: {title_color}; background: transparent; border: none;")
+        self.value_label.setStyleSheet(f"color: {self._current_color}; background: transparent; border: none;")
+        if self.unit_label:
+            self.unit_label.setStyleSheet(f"color: {unit_color}; background: transparent; border: none;")
+
     def set_value(self, val_text: str, custom_color: str | None = None):
         self.value_label.setText(val_text)
         color = custom_color if custom_color else self.accent_color
         if color != self._current_color:
             self._current_color = color
             self.value_label.setStyleSheet(f"color: {color}; background: transparent; border: none;")
+            self.set_theme(self.current_theme)
 
     def get_value(self) -> str:
         return self.value_label.text()
@@ -276,6 +461,9 @@ class SupervisoryMainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Linear Guide Actuator - Modbus RTU (USB Serial) Supervisory (SCADA)")
         self.resize(1280, 800)
+
+        # Theme Tracking ("dark" or "light")
+        self.current_theme = "dark"
 
         # Apply dark mode stylesheet
         self.setStyleSheet(DARK_STYLESHEET)
@@ -339,10 +527,10 @@ class SupervisoryMainWindow(QMainWindow):
         layout.setSpacing(10)
 
         # Title Label
-        title_label = QLabel("🔌 LINEAR GUIDE SUPERVISORY (MODBUS RTU / USB)")
-        title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: #89B4FA;")
-        layout.addWidget(title_label)
+        self.title_label = QLabel("🔌 LINEAR GUIDE SUPERVISORY (MODBUS RTU / USB)")
+        self.title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self.title_label.setStyleSheet("color: #89B4FA;")
+        layout.addWidget(self.title_label)
 
         layout.addStretch()
 
@@ -381,6 +569,13 @@ class SupervisoryMainWindow(QMainWindow):
         self.connect_btn.setObjectName("connect_btn")
         self.connect_btn.clicked.connect(self.toggle_connection)
         layout.addWidget(self.connect_btn)
+
+        # Theme Toggle Button (Light Mode / Dark Mode)
+        self.theme_btn = QPushButton("☀️ Modo Claro")
+        self.theme_btn.setObjectName("theme_btn")
+        self.theme_btn.setToolTip("Alternar para o Modo Claro")
+        self.theme_btn.clicked.connect(self.toggle_theme)
+        layout.addWidget(self.theme_btn)
 
         # Connection Status Badge
         self.conn_badge = StatusBadge("DISCONNECTED", "#F38BA8", "#313244")
@@ -558,9 +753,9 @@ class SupervisoryMainWindow(QMainWindow):
         graph_toolbar = QHBoxLayout()
         graph_toolbar.setSpacing(10)
 
-        lbl_buffer = QLabel("Buffer dos Gráficos:")
-        lbl_buffer.setStyleSheet("color: #A6ADC8; font-weight: bold;")
-        graph_toolbar.addWidget(lbl_buffer)
+        self.lbl_buffer = QLabel("Buffer dos Gráficos:")
+        self.lbl_buffer.setStyleSheet("color: #A6ADC8; font-weight: bold;")
+        graph_toolbar.addWidget(self.lbl_buffer)
 
         self.spin_max_points = QSpinBox()
         self.spin_max_points.setRange(50, 3000)
@@ -644,6 +839,79 @@ class SupervisoryMainWindow(QMainWindow):
         if current:
             self.serial_combo.setCurrentText(current)
 
+    def toggle_theme(self):
+        new_theme = "light" if self.current_theme == "dark" else "dark"
+        self.set_theme(new_theme)
+
+    def set_theme(self, theme_name: str):
+        self.current_theme = theme_name
+        is_light = (theme_name == "light")
+        self.setStyleSheet(LIGHT_STYLESHEET if is_light else DARK_STYLESHEET)
+
+        # Update button text & tooltip
+        if hasattr(self, 'theme_btn'):
+            self.theme_btn.setText("🌙 Modo Escuro" if is_light else "☀️ Modo Claro")
+            self.theme_btn.setToolTip("Alternar para o Modo Escuro" if is_light else "Alternar para o Modo Claro")
+
+        # Update title colors
+        if hasattr(self, 'title_label'):
+            title_color = "#1E66F5" if is_light else "#89B4FA"
+            self.title_label.setStyleSheet(f"color: {title_color};")
+        if hasattr(self, 'sp_val_label'):
+            sp_color = "#1E66F5" if is_light else "#89B4FA"
+            self.sp_val_label.setStyleSheet(f"color: {sp_color}; font-weight: bold;")
+        if hasattr(self, 'lbl_buffer'):
+            buf_color = "#4C4F69" if is_light else "#A6ADC8"
+            self.lbl_buffer.setStyleSheet(f"color: {buf_color}; font-weight: bold;")
+        if hasattr(self, 'lbl_points_info'):
+            pts_color = "#5C5F77" if is_light else "#6C7086"
+            self.lbl_points_info.setStyleSheet(f"color: {pts_color}; font-size: 11px;")
+
+        # Update DigitalDisplayCards
+        if hasattr(self, 'card_pos'):
+            for card in [self.card_pos, self.card_sp, self.card_err, self.card_vel, self.card_duty]:
+                card.set_theme(theme_name)
+
+        # Update Badges
+        if hasattr(self, 'conn_badge'):
+            self.conn_badge.set_theme(theme_name)
+            if self.modbus_worker._connected:
+                self.conn_badge.setText("CONNECTED")
+                self.conn_badge.set_colors("#1B8A38" if is_light else "#A6E3A1", "#E8F5E9" if is_light else "#1E3A29")
+            else:
+                self.conn_badge.setText("DISCONNECTED")
+                self.conn_badge.set_colors("#D20F39" if is_light else "#F38BA8", "#FFEBEE" if is_light else "#313244")
+
+        if hasattr(self, 'state_badge'):
+            self.state_badge.set_theme(theme_name)
+            self.state_badge.update_machine_state(self.latest_machine_state)
+
+        # Update PyQtGraph background & foreground
+        if hasattr(self, 'graph_widget'):
+            bg_color = '#FFFFFF' if is_light else '#181825'
+            fg_color = '#24273A' if is_light else '#CDD6F4'
+            grid_alpha = 0.2 if is_light else 0.3
+
+            self.graph_widget.setBackground(bg_color)
+            for plot in [self.plot_pos, self.plot_vel, self.plot_duty]:
+                plot.getAxis('left').setTextPen(fg_color)
+                plot.getAxis('left').setPen(fg_color)
+                plot.getAxis('bottom').setTextPen(fg_color)
+                plot.getAxis('bottom').setPen(fg_color)
+                plot.showGrid(x=True, y=True, alpha=grid_alpha)
+
+            # Update curve pens
+            sp_color = '#1E66F5' if is_light else '#89B4FA'
+            pos_color = '#1B8A38' if is_light else '#A6E3A1'
+            vel_color = '#D9730D' if is_light else '#FAB387'
+            duty_color = '#8839EF' if is_light else '#CBA6F7'
+            self.curve_setpoint.setPen(pg.mkPen(color=sp_color, width=2, style=Qt.PenStyle.DashLine))
+            self.curve_position.setPen(pg.mkPen(color=pos_color, width=2.5))
+            self.curve_velocity.setPen(pg.mkPen(color=vel_color, width=2))
+            self.curve_duty.setPen(pg.mkPen(color=duty_color, width=2))
+
+        self.append_log(f"🎨 Tema alterado para: {'Modo Claro' if is_light else 'Modo Escuro'}.")
+
     def toggle_connection(self):
         if not self.modbus_worker._user_wants_connected and not self.modbus_worker._connected:
             serial_port = self.serial_combo.currentText().strip()
@@ -656,16 +924,17 @@ class SupervisoryMainWindow(QMainWindow):
 
     @pyqtSlot(bool, str)
     def on_connection_status_changed(self, connected: bool, msg: str):
+        is_light = (self.current_theme == "light")
         if connected:
             self.connect_btn.setText("DISCONNECT")
             self.connect_btn.setObjectName("disconnect_btn")
             self.conn_badge.setText("CONNECTED")
-            self.conn_badge.set_colors("#A6E3A1", "#1E3A29")
+            self.conn_badge.set_colors("#1B8A38" if is_light else "#A6E3A1", "#E8F5E9" if is_light else "#1E3A29")
         else:
             self.connect_btn.setText("CONNECT")
             self.connect_btn.setObjectName("connect_btn")
             self.conn_badge.setText("DISCONNECTED")
-            self.conn_badge.set_colors("#F38BA8", "#313244")
+            self.conn_badge.set_colors("#D20F39" if is_light else "#F38BA8", "#FFEBEE" if is_light else "#313244")
             self.state_badge.update_machine_state(0)
 
         # Force stylesheet update on connect_btn
@@ -697,7 +966,10 @@ class SupervisoryMainWindow(QMainWindow):
         error = sp - pos
         self.card_pos.set_value(f"{pos:.2f}")
         self.card_sp.set_value(f"{sp:.2f}")
-        err_color = "#A6E3A1" if abs(error) <= 0.1 else "#F9E2AF"
+        is_light = (self.current_theme == "light")
+        in_pos_color = "#1B8A38" if is_light else "#A6E3A1"
+        err_alert_color = "#DF8E1D" if is_light else "#F9E2AF"
+        err_color = in_pos_color if abs(error) <= 0.1 else err_alert_color
         self.card_err.set_value(f"{error:+.2f}", custom_color=err_color)
         self.card_vel.set_value(f"{vel:.1f}")
         self.card_duty.set_value(f"{duty:+.1f}")

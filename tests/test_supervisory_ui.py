@@ -242,3 +242,43 @@ def test_supervisory_burst_auto_expansion(qapp, monkeypatch):
 
     finally:
         win.modbus_worker.stop_thread()
+
+
+def test_supervisory_theme_toggle(qapp):
+    """Test switching between Dark Mode and Light Mode."""
+    win = SupervisoryMainWindow()
+    try:
+        # Defaults to dark mode
+        assert win.current_theme == "dark"
+        assert "☀️ Modo Claro" in win.theme_btn.text()
+        assert win.card_pos.current_theme == "dark"
+
+        # Toggle to light mode
+        win.toggle_theme()
+        assert win.current_theme == "light"
+        assert "🌙 Modo Escuro" in win.theme_btn.text()
+        assert win.card_pos.current_theme == "light"
+        assert win.conn_badge.current_theme == "light"
+        assert win.state_badge.current_theme == "light"
+
+        # Toggle back to dark mode
+        win.toggle_theme()
+        assert win.current_theme == "dark"
+        assert "☀️ Modo Claro" in win.theme_btn.text()
+        assert win.card_pos.current_theme == "dark"
+        assert win.conn_badge.current_theme == "dark"
+
+    finally:
+        win.modbus_worker.stop_thread()
+
+
+def test_digital_display_card_theme_switch(qapp):
+    """Test DigitalDisplayCard background and borders adjust upon theme switch."""
+    card = DigitalDisplayCard("Velocidade", unit="mm/s", accent_color="#FAB387")
+    assert card.current_theme == "dark"
+    assert "#181825" in card.styleSheet()
+
+    card.set_theme("light")
+    assert card.current_theme == "light"
+    assert "#FFFFFF" in card.styleSheet()
+    assert "#CCD0DA" in card.styleSheet()
