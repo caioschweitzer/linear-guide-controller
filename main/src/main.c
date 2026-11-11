@@ -103,7 +103,7 @@ static void control_loop_task(void *pvParameters) {
         } else if (state == MACHINE_STATE_HOMING) {
             s_open_loop_running = false;
             pid_reset(&g_pid);
-            if (gpio_get_level(GPIO_HOME_PIN) == 0) { // 0V indicates magnet detected (contact opened with pull-down)
+            if (gpio_get_level(GPIO_HOME_PIN) != 0) { // Active-HIGH indicates home sensor triggered
                 motor_brake(&g_motor);
                 motor_set_effort(&g_motor, 0.0f);
                 encoder_clear_count(&g_encoder);

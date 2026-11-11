@@ -181,7 +181,7 @@ void modbus_slave_sync_buffers(void) {
     if (g_system_data.safety_enable)
       discrete_bits |= (1 << 2);
 #ifndef HOST_TEST
-    if (gpio_get_level(GPIO_HOME_PIN) == 0) // 0V = Magnet detected (1: Active)
+    if (gpio_get_level(GPIO_HOME_PIN) != 0) // Active-HIGH = Home Sensor Detected (Bit 3: 1)
       discrete_bits |= (1 << 3);
 #endif
     g_modbus_discrete_reg.discrete_inputs = discrete_bits;

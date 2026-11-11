@@ -15,6 +15,7 @@ typedef void* SemaphoreHandle_t;
 #define pdTRUE true
 #define pdFALSE false
 #define pdMS_TO_TICKS(ms) ((TickType_t)(ms))
+#define GPIO_NUM_37 37
 #define GPIO_NUM_16 16
 #define GPIO_NUM_12 12
 #define GPIO_NUM_11 11
@@ -30,7 +31,7 @@ extern "C" {
 
 #define GPIO_EMERGENCY_PIN     GPIO_NUM_12
 #define GPIO_START_PIN         GPIO_NUM_11
-#define GPIO_HOME_PIN          GPIO_NUM_16
+#define GPIO_HOME_PIN          GPIO_NUM_37
 #define GPIO_SAFETY_ENABLE_PIN GPIO_NUM_13
 
 typedef enum {

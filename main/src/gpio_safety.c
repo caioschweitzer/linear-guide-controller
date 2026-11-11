@@ -87,7 +87,7 @@ esp_err_t gpio_safety_init(void) {
     };
     gpio_config(&io_conf_start);
 
-    // 1b. Configure GPIO 16 (Home Sensor) - Input with Internal Pull-down (NC Magnetic Sensor, Active-LOW / 0V)
+    // 1b. Configure GPIO 37 (Home Sensor) - Input with Internal Pull-down (NC Magnetic Sensor, Active-LOW / 0V)
     gpio_config_t io_conf_home = {
         .pin_bit_mask = (1ULL << GPIO_HOME_PIN),
         .mode = GPIO_MODE_INPUT,
