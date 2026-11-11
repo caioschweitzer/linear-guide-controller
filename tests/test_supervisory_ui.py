@@ -129,8 +129,8 @@ def test_supervisory_telemetry_display_updates(qapp):
             "current_velocity": 0.0,
             "duty_cycle": 5.0,
             "machine_state": 1,
-            "estop_button": 1,
-            "start_button": 1,
+            "estop_button": 0,
+            "start_button": 0,
             "home_sensor": 0,
             "safety_enable": 1,
             "led_status": 1

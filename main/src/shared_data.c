@@ -5,7 +5,7 @@
 #ifndef HOST_TEST
 #include "esp_log.h"
 #else
-static int s_host_simulated_gpio_level = 1;
+static int s_host_simulated_gpio_level = 0; // 0 == SAFE / unpressed in active-high logic
 int gpio_get_level(int pin) {
     (void)pin;
     return s_host_simulated_gpio_level;
@@ -22,7 +22,7 @@ SystemData g_system_data = {
     .ki = 0.5f,
     .kd = 0.05f,
     .machine_state = MACHINE_STATE_IDLE,
-    .button_estop = true,
+    .button_estop = false,
     .button_start = false,
     .safety_enable = true,
     .led_status = false
@@ -49,7 +49,7 @@ void shared_data_init(void) {
         g_system_data.ki = 0.5f;
         g_system_data.kd = 0.05f;
         g_system_data.machine_state = MACHINE_STATE_IDLE;
-        g_system_data.button_estop = true;
+        g_system_data.button_estop = false;
         g_system_data.button_start = false;
         g_system_data.safety_enable = true;
         g_system_data.led_status = false;
@@ -86,16 +86,19 @@ bool shared_data_request_state_change(machine_state_t new_state) {
 #ifdef HOST_TEST
     if (new_state == MACHINE_STATE_IDLE) {
         gpio_safety_reset_simulation();
+        s_host_simulated_gpio_level = 0;
     }
 #endif
 
-    // Check emergency hardware pin level (GPIO 12: active low, 1 == SAFE/unpressed, 0 == PRESSED)
+    // Check emergency hardware pin level (GPIO 12: active-high, 0 == SAFE/unpressed, 1 == PRESSED)
     int emergency_pin_level = gpio_get_level(GPIO_EMERGENCY_PIN);
 
     // Rule 1: Transitioning to EMERGENCY is always granted immediately
     if (new_state == MACHINE_STATE_EMERGENCY) {
 #ifndef HOST_TEST
         gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 0);
+#else
+        s_host_simulated_gpio_level = 1;
 #endif
         if (current == MACHINE_STATE_OPEN_LOOP_TEST) {
             g_burst_buffer.status = BURST_STATUS_ABORTED;
@@ -104,8 +107,8 @@ bool shared_data_request_state_change(machine_state_t new_state) {
         return true;
     }
 
-    // Rule 2: If emergency pin is physically pressed (LOW == 0), no transition to IDLE or MOVING is permitted
-    if (emergency_pin_level == 0) {
+    // Rule 2: If emergency pin is physically pressed (HIGH != 0), no transition to IDLE or MOVING is permitted
+    if (emergency_pin_level != 0) {
 #ifndef HOST_TEST
         gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 0);
 #endif
@@ -118,7 +121,7 @@ bool shared_data_request_state_change(machine_state_t new_state) {
 
     // Rule 3: Moving requires current state == IDLE
     if (new_state == MACHINE_STATE_MOVING) {
-        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 1) {
+        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 0) {
 #ifndef HOST_TEST
             gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
 #endif
@@ -128,21 +131,18 @@ bool shared_data_request_state_change(machine_state_t new_state) {
         return false;
     }
 
-    // Rule 4: Reset (EMERGENCY or OPEN_LOOP_TEST -> IDLE) requires emergency_pin_level == 1 (HIGH)
+    // Rule 4: Reset (EMERGENCY or OPEN_LOOP_TEST -> IDLE) requires emergency_pin_level == 0 (SAFE)
     if (new_state == MACHINE_STATE_IDLE) {
-        if (emergency_pin_level == 1) {
-#ifndef HOST_TEST
-            gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
-#endif
+        if (emergency_pin_level == 0) {
             shared_data_set_state_atomic(MACHINE_STATE_IDLE);
             return true;
         }
         return false;
     }
 
-    // Rule 5: Homing requires emergency_pin_level == 1 (HIGH) and current == IDLE
+    // Rule 5: Homing requires emergency_pin_level == 0 (SAFE) and current == IDLE
     if (new_state == MACHINE_STATE_HOMING) {
-        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 1) {
+        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 0) {
 #ifndef HOST_TEST
             gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
 #endif
@@ -152,14 +152,14 @@ bool shared_data_request_state_change(machine_state_t new_state) {
         return false;
     }
 
-    // Rule 6: Open-Loop Test requires current == IDLE, emergency_pin_level == 1, and |pos| <= 5.0 mm
+    // Rule 6: Open-Loop Test requires current == IDLE, emergency_pin_level == 0, and |pos| <= 5.0 mm
     if (new_state == MACHINE_STATE_OPEN_LOOP_TEST) {
         float current_pos = 0.0f;
         if (shared_data_lock(pdMS_TO_TICKS(5))) {
             current_pos = g_system_data.current_position;
             shared_data_unlock();
         }
-        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 1 && fabsf(current_pos) <= 5.0f) {
+        if (current == MACHINE_STATE_IDLE && emergency_pin_level == 0 && fabsf(current_pos) <= 5.0f) {
 #ifndef HOST_TEST
             gpio_set_level(GPIO_SAFETY_ENABLE_PIN, 1);
 #endif

@@ -174,15 +174,22 @@ void modbus_slave_sync_buffers(void) {
 
     // Update Discrete Inputs register (Bit 0: E-Stop, Bit 1: Start, Bit 2: Safety Enable, Bit 3: Home Sensor)
     uint8_t discrete_bits = 0;
+#ifndef HOST_TEST
+    if (gpio_get_level(GPIO_EMERGENCY_PIN) != 0) // Active-HIGH: 1 = Pressed / Active
+      discrete_bits |= (1 << 0);
+    if (gpio_get_level(GPIO_START_PIN) != 0)     // Active-HIGH: 1 = Pressed
+      discrete_bits |= (1 << 1);
+    if (gpio_get_level(GPIO_SAFETY_ENABLE_PIN) != 0) // 1 = Hardware enabled
+      discrete_bits |= (1 << 2);
+    if (gpio_get_level(GPIO_HOME_PIN) != 0)      // Active-HIGH: 1 = Home Sensor Detected
+      discrete_bits |= (1 << 3);
+#else
     if (g_system_data.button_estop)
       discrete_bits |= (1 << 0);
     if (g_system_data.button_start)
       discrete_bits |= (1 << 1);
     if (g_system_data.safety_enable)
       discrete_bits |= (1 << 2);
-#ifndef HOST_TEST
-    if (gpio_get_level(GPIO_HOME_PIN) != 0) // Active-HIGH = Home Sensor Detected (Bit 3: 1)
-      discrete_bits |= (1 << 3);
 #endif
     g_modbus_discrete_reg.discrete_inputs = discrete_bits;
 

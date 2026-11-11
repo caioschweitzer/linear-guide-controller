@@ -981,15 +981,20 @@ class SupervisoryMainWindow(QMainWindow):
         # Update Machine State Badge
         self.state_badge.update_machine_state(state)
 
-        # Update Hardware Status Labels (Active-LOW hardware pin logic: 0 = Pressed/Tripped, 1 = Safe/Released)
-        estop_tripped = not data["estop_button"]
+        # Update Hardware Status Labels (Active-HIGH hardware pin logic: 1 = Pressed/Tripped, 0 = Safe/Released)
+        estop_tripped = bool(data["estop_button"])
         estop_str = "ACTIVE 🚨" if estop_tripped else "OK"
-        estop_color = "#F38BA8" if estop_tripped else "#A6E3A1"
+        is_light = (self.current_theme == "light")
+        if estop_tripped:
+            estop_color = "#D20F39" if is_light else "#F38BA8"
+        else:
+            estop_color = "#1B8A38" if is_light else "#A6E3A1"
         self.lbl_hw_estop.setText(f"E-Stop Pin: <font color='{estop_color}'><b>{estop_str}</b></font>")
 
-        start_pressed = not data["start_button"]
+        start_pressed = bool(data["start_button"])
         start_str = "PRESSED" if start_pressed else "RELEASED"
-        self.lbl_hw_start.setText(f"Start Pin: <b>{start_str}</b>")
+        start_color = "#1E66F5" if (start_pressed and is_light) else "#89B4FA" if start_pressed else ("#5C5F77" if is_light else "#CDD6F4")
+        self.lbl_hw_start.setText(f"Start Pin: <font color='{start_color}'><b>{start_str}</b></font>")
 
         home_triggered = bool(data.get("home_sensor", False))
         home_str = "DETECTED 🎯" if home_triggered else "CLEAR"
