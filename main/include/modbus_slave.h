@@ -31,10 +31,10 @@ extern "C" {
 
 // Modbus Register Map Offsets & Sizes
 #define HOLDING_REG_START_ADDR  0x0000
-#define HOLDING_REG_COUNT       10     // Setpoint (2), Command (1), Kp (2), Ki (2), Kd (2), Burst Read Index (1)
+#define HOLDING_REG_COUNT       15     // Setpoint (2), Command (1), Kp (2), Ki (2), Kd (2), Burst Read Index (1), OL PWM (2), OL Mode (1), OL Coast Pos (2)
 
 #define INPUT_REG_START_ADDR    0x0000
-#define INPUT_REG_COUNT         15     // Pos (2), Vel (2), Duty (2), State (1), Burst Status (1), Count (1), Time (2), Pos (2), Vel (2)
+#define INPUT_REG_COUNT         17     // Pos (2), Vel (2), Duty (2), State (1), Burst Status (1), Count (1), Time (2), Pos (2), Vel (2), Duty (2)
 
 #define DISCRETE_REG_START_ADDR 0x0000
 #define DISCRETE_REG_COUNT      3      // E-Stop (Bit 0), Start (Bit 1), Safety Enable (Bit 2)
@@ -54,6 +54,11 @@ typedef struct {
     uint16_t kd_hi;            // 0x0007 Float32 MSW
     uint16_t kd_lo;            // 0x0008 Float32 LSW
     uint16_t burst_read_index; // 0x0009 uint16 Sample index to read (0 to 399)
+    uint16_t open_loop_pwm_hi; // 0x000A Float32 MSW (1.0 to 100.0 %)
+    uint16_t open_loop_pwm_lo; // 0x000B Float32 LSW (1.0 to 100.0 %)
+    uint16_t open_loop_mode;   // 0x000C uint16 (0: BRAKE, 1: COAST)
+    uint16_t open_loop_coast_pos_hi; // 0x000D Float32 MSW (50.0 to 536.0 mm)
+    uint16_t open_loop_coast_pos_lo; // 0x000E Float32 LSW (50.0 to 536.0 mm)
 } holding_reg_params_t;
 
 // Input register structure
@@ -73,6 +78,8 @@ typedef struct {
     uint16_t sample_pos_lo;      // Float32 LSW (0x000C)
     uint16_t sample_vel_hi;      // Float32 MSW (0x000D)
     uint16_t sample_vel_lo;      // Float32 LSW (0x000E)
+    uint16_t sample_duty_hi;     // Float32 MSW (0x000F)
+    uint16_t sample_duty_lo;     // Float32 LSW (0x0010)
 } input_reg_params_t;
 
 // Discrete inputs structure (FC 0x02)

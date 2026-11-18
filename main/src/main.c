@@ -53,6 +53,9 @@ static void control_loop_task(void *pvParameters) {
         current_pos_mm = kinematics_update(&g_kinematics, raw_counts, 0.01f, &current_vel_mm_s);
 
         float kp = 2.0f, ki = 0.5f, kd = 0.05f;
+        float open_loop_pwm = 100.0f;
+        float open_loop_coast_pos_mm = 400.0f;
+        uint16_t open_loop_mode = OPEN_LOOP_MODE_BRAKE;
 
         // 4. Fast Snapshot Mutex Lock (< 1 ms hold)
         if (shared_data_lock(pdMS_TO_TICKS(1))) {
@@ -61,6 +64,9 @@ static void control_loop_task(void *pvParameters) {
             kp = g_system_data.kp;
             ki = g_system_data.ki;
             kd = g_system_data.kd;
+            open_loop_pwm = g_system_data.open_loop_pwm;
+            open_loop_coast_pos_mm = g_system_data.open_loop_coast_pos_mm;
+            open_loop_mode = g_system_data.open_loop_mode;
 
             // Publish telemetry to shared structure for Core 0 (IHM & Modbus)
             g_system_data.current_position = current_pos_mm;
@@ -90,18 +96,26 @@ static void control_loop_task(void *pvParameters) {
         // 7. Closed-Loop Control Decision
         static bool s_open_loop_running = false;
         static TickType_t s_open_loop_start_tick = 0;
+        static bool s_open_loop_coasting = false;
+        static uint16_t s_coast_zero_vel_ticks = 0;
 
         if (state == MACHINE_STATE_EMERGENCY) {
             s_open_loop_running = false;
+            s_open_loop_coasting = false;
+            s_coast_zero_vel_ticks = 0;
             pid_reset(&g_pid);
             motor_brake(&g_motor);
             motor_set_effort(&g_motor, 0.0f);
         } else if (state == MACHINE_STATE_MOVING) {
             s_open_loop_running = false;
+            s_open_loop_coasting = false;
+            s_coast_zero_vel_ticks = 0;
             float duty = pid_compute(&g_pid, position_setpoint, current_pos_mm, 0.01f);
             motor_set_effort(&g_motor, duty);
         } else if (state == MACHINE_STATE_HOMING) {
             s_open_loop_running = false;
+            s_open_loop_coasting = false;
+            s_coast_zero_vel_ticks = 0;
             pid_reset(&g_pid);
             if (gpio_get_level(GPIO_HOME_PIN) != 0) { // Active-HIGH indicates home sensor triggered
                 motor_brake(&g_motor);
@@ -116,11 +130,26 @@ static void control_loop_task(void *pvParameters) {
             pid_reset(&g_pid);
             if (!s_open_loop_running) {
                 s_open_loop_running = true;
+                s_open_loop_coasting = false;
+                s_coast_zero_vel_ticks = 0;
                 s_open_loop_start_tick = xTaskGetTickCount();
             }
 
             uint32_t elapsed_ms = pdTICKS_TO_MS(xTaskGetTickCount() - s_open_loop_start_tick);
             const float target_travel_mm = SYSTEM_MAX_TRAVEL_MM * 0.80f; // 536.0 mm (80% of travel)
+            const float coast_endstop_guard_mm = SYSTEM_MAX_TRAVEL_MM - 20.0f; // 650.0 mm
+            const uint32_t open_loop_timeout_ms = 7500; // 1.5x of 5000 ms
+
+            float applied_duty = open_loop_pwm;
+            if (open_loop_mode == OPEN_LOOP_MODE_COAST) {
+                if (!s_open_loop_coasting && current_pos_mm >= open_loop_coast_pos_mm) {
+                    s_open_loop_coasting = true;
+                    s_coast_zero_vel_ticks = 0;
+                }
+                if (s_open_loop_coasting) {
+                    applied_duty = 0.0f;
+                }
+            }
 
             // Record sample to in-RAM burst buffer (100 Hz sampling)
             if (g_burst_buffer.sample_count < BURST_BUFFER_MAX_SAMPLES) {
@@ -128,31 +157,90 @@ static void control_loop_task(void *pvParameters) {
                 g_burst_buffer.samples[idx].time_ms = elapsed_ms;
                 g_burst_buffer.samples[idx].position = current_pos_mm;
                 g_burst_buffer.samples[idx].velocity = current_vel_mm_s;
+                g_burst_buffer.samples[idx].duty_pct = applied_duty;
                 g_burst_buffer.sample_count++;
             }
 
-            // Stop condition 1: 80% travel threshold reached (536.0 mm)
-            if (current_pos_mm >= target_travel_mm) {
-                motor_brake(&g_motor);
-                motor_set_effort(&g_motor, 0.0f);
-                s_open_loop_running = false;
-                g_burst_buffer.status = BURST_STATUS_READY;
-                shared_data_request_state_change(MACHINE_STATE_IDLE);
-            }
-            // Stop condition 2: Safety timeout (5.0 seconds)
-            else if (elapsed_ms >= 5000) {
-                motor_brake(&g_motor);
-                motor_set_effort(&g_motor, 0.0f);
-                s_open_loop_running = false;
-                g_burst_buffer.status = BURST_STATUS_ABORTED;
-                shared_data_request_state_change(MACHINE_STATE_IDLE);
-            }
-            // Ongoing drive: Full effort +100.0%
-            else {
-                motor_set_effort(&g_motor, 100.0f);
+            if (open_loop_mode == OPEN_LOOP_MODE_COAST) {
+                if (s_open_loop_coasting) {
+                    if (fabsf(current_vel_mm_s) <= 2.0f) {
+                        s_coast_zero_vel_ticks++;
+                    } else {
+                        s_coast_zero_vel_ticks = 0;
+                    }
+
+                    // Natural stop detected (150 ms sustained near-zero velocity)
+                    if (s_coast_zero_vel_ticks >= 15) {
+                        motor_set_effort(&g_motor, 0.0f);
+                        s_open_loop_running = false;
+                        s_open_loop_coasting = false;
+                        g_burst_buffer.status = BURST_STATUS_READY;
+                        shared_data_request_state_change(MACHINE_STATE_IDLE);
+                    }
+                    // Safety endstop guard while coasting
+                    else if (current_pos_mm >= coast_endstop_guard_mm) {
+                        motor_brake(&g_motor);
+                        motor_set_effort(&g_motor, 0.0f);
+                        s_open_loop_running = false;
+                        s_open_loop_coasting = false;
+                        g_burst_buffer.status = BURST_STATUS_READY;
+                        shared_data_request_state_change(MACHINE_STATE_IDLE);
+                    }
+                    // Buffer full or safety timeout (7.5 s)
+                    else if (g_burst_buffer.sample_count >= BURST_BUFFER_MAX_SAMPLES || elapsed_ms >= open_loop_timeout_ms) {
+                        motor_set_effort(&g_motor, 0.0f);
+                        s_open_loop_running = false;
+                        s_open_loop_coasting = false;
+                        g_burst_buffer.status = BURST_STATUS_READY;
+                        shared_data_request_state_change(MACHINE_STATE_IDLE);
+                    }
+                    // Coasting with 0% effort (no active brake)
+                    else {
+                        motor_set_effort(&g_motor, 0.0f);
+                    }
+                } else {
+                    if (current_pos_mm >= coast_endstop_guard_mm) {
+                        motor_brake(&g_motor);
+                        motor_set_effort(&g_motor, 0.0f);
+                        s_open_loop_running = false;
+                        g_burst_buffer.status = BURST_STATUS_READY;
+                        shared_data_request_state_change(MACHINE_STATE_IDLE);
+                    } else if (elapsed_ms >= open_loop_timeout_ms) {
+                        motor_brake(&g_motor);
+                        motor_set_effort(&g_motor, 0.0f);
+                        s_open_loop_running = false;
+                        g_burst_buffer.status = BURST_STATUS_ABORTED;
+                        shared_data_request_state_change(MACHINE_STATE_IDLE);
+                    } else {
+                        motor_set_effort(&g_motor, applied_duty);
+                    }
+                }
+            } else {
+                // Stop condition 1: 80% travel threshold reached (536.0 mm)
+                if (current_pos_mm >= target_travel_mm) {
+                    motor_brake(&g_motor);
+                    motor_set_effort(&g_motor, 0.0f);
+                    s_open_loop_running = false;
+                    g_burst_buffer.status = BURST_STATUS_READY;
+                    shared_data_request_state_change(MACHINE_STATE_IDLE);
+                }
+                // Stop condition 2: Safety timeout (7.5 seconds)
+                else if (elapsed_ms >= open_loop_timeout_ms) {
+                    motor_brake(&g_motor);
+                    motor_set_effort(&g_motor, 0.0f);
+                    s_open_loop_running = false;
+                    g_burst_buffer.status = BURST_STATUS_ABORTED;
+                    shared_data_request_state_change(MACHINE_STATE_IDLE);
+                }
+                // Ongoing drive: Configured open-loop step PWM effort
+                else {
+                    motor_set_effort(&g_motor, applied_duty);
+                }
             }
         } else { // MACHINE_STATE_IDLE
             s_open_loop_running = false;
+            s_open_loop_coasting = false;
+            s_coast_zero_vel_ticks = 0;
             pid_reset(&g_pid);
             motor_set_effort(&g_motor, 0.0f);
         }

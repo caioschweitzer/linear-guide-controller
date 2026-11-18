@@ -37,12 +37,13 @@ class OpenLoopSampleStruct(ctypes.Structure):
         ("time_ms", ctypes.c_uint32),
         ("position", ctypes.c_float),
         ("velocity", ctypes.c_float),
+        ("duty_pct", ctypes.c_float),
     ]
 
 
 class BurstBufferStruct(ctypes.Structure):
     _fields_ = [
-        ("samples", OpenLoopSampleStruct * 550),
+        ("samples", OpenLoopSampleStruct * 825),
         ("sample_count", ctypes.c_uint16),
         ("status", ctypes.c_uint16),
         ("read_index", ctypes.c_uint16),
@@ -58,6 +59,9 @@ class SystemDataStruct(ctypes.Structure):
         ("kp", ctypes.c_float),
         ("ki", ctypes.c_float),
         ("kd", ctypes.c_float),
+        ("open_loop_pwm", ctypes.c_float),
+        ("open_loop_coast_pos_mm", ctypes.c_float),
+        ("open_loop_mode", ctypes.c_uint16),
         ("machine_state", ctypes.c_uint16),
         ("button_estop", ctypes.c_bool),
         ("button_start", ctypes.c_bool),
@@ -78,6 +82,11 @@ class HoldingRegStruct(ctypes.Structure):
         ("kd_hi", ctypes.c_uint16),
         ("kd_lo", ctypes.c_uint16),
         ("burst_read_index", ctypes.c_uint16),
+        ("open_loop_pwm_hi", ctypes.c_uint16),
+        ("open_loop_pwm_lo", ctypes.c_uint16),
+        ("open_loop_mode", ctypes.c_uint16),
+        ("open_loop_coast_pos_hi", ctypes.c_uint16),
+        ("open_loop_coast_pos_lo", ctypes.c_uint16),
     ]
 
 
@@ -98,6 +107,8 @@ class InputRegStruct(ctypes.Structure):
         ("sample_pos_lo", ctypes.c_uint16),
         ("sample_vel_hi", ctypes.c_uint16),
         ("sample_vel_lo", ctypes.c_uint16),
+        ("sample_duty_hi", ctypes.c_uint16),
+        ("sample_duty_lo", ctypes.c_uint16),
     ]
 
 
@@ -280,7 +291,105 @@ def test_open_loop_80_percent_travel_geometry():
     assert abs(clearance_margin - 134.0) < 0.001
     assert clearance_margin > 100.0  # Safe braking distance margin > 100 mm
 
-    # 550 samples at 100 Hz (10ms) allows up to 5.5 seconds of recording
-    max_recording_time_s = 550 * 0.01
-    assert max_recording_time_s == 5.5
+    # 825 samples at 100 Hz (10ms) allows up to 8.25 seconds of recording (1.5x of 550)
+    max_recording_time_s = 825 * 0.01
+    assert max_recording_time_s == 8.25
+
+
+def test_open_loop_pwm_register_sync_and_clamping(system_lib):
+    """Verify open_loop_pwm Modbus holding register default, sync, and [1.0, 100.0] clamping."""
+    import struct
+
+    def float_to_regs(val: float):
+        raw = struct.pack(">f", val)
+        return struct.unpack(">HH", raw)
+
+    system_lib.shared_data_init()
+    system_lib.modbus_slave_init()
+    system_lib.modbus_slave_sync_buffers()
+
+    g_sys = SystemDataStruct.in_dll(system_lib, "g_system_data")
+    g_hold = HoldingRegStruct.in_dll(system_lib, "g_modbus_holding_reg")
+
+    # Default is 100.0%
+    assert abs(g_sys.open_loop_pwm - 100.0) < 1e-4
+
+    # Valid value (60.0%)
+    hi, lo = float_to_regs(60.0)
+    g_hold.open_loop_pwm_hi, g_hold.open_loop_pwm_lo = hi, lo
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(g_sys.open_loop_pwm - 60.0) < 1e-4
+
+    # Below minimum (0.0% -> clamped to 1.0%)
+    hi, lo = float_to_regs(0.0)
+    g_hold.open_loop_pwm_hi, g_hold.open_loop_pwm_lo = hi, lo
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(g_sys.open_loop_pwm - 1.0) < 1e-4
+
+    # Above maximum (150.0% -> clamped to 100.0%)
+    hi, lo = float_to_regs(150.0)
+    g_hold.open_loop_pwm_hi, g_hold.open_loop_pwm_lo = hi, lo
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(g_sys.open_loop_pwm - 100.0) < 1e-4
+
+    # NaN fallback -> 100.0%
+    hi, lo = float_to_regs(float("nan"))
+    g_hold.open_loop_pwm_hi, g_hold.open_loop_pwm_lo = hi, lo
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(g_sys.open_loop_pwm - 100.0) < 1e-4
+
+
+def test_open_loop_coast_mode_and_sample_duty_registers(system_lib):
+    """Verify open_loop_mode, coast_pos clamping [50, 536], and sample_duty indexed read."""
+    import struct
+
+    def float_to_regs(val: float):
+        return struct.unpack(">HH", struct.pack(">f", val))
+
+    def regs_to_float(hi: int, lo: int) -> float:
+        return struct.unpack(">f", struct.pack(">HH", hi, lo))[0]
+
+    system_lib.shared_data_init()
+    system_lib.modbus_slave_init()
+    system_lib.modbus_slave_sync_buffers()
+
+    g_sys = SystemDataStruct.in_dll(system_lib, "g_system_data")
+    g_hold = HoldingRegStruct.in_dll(system_lib, "g_modbus_holding_reg")
+    g_in = InputRegStruct.in_dll(system_lib, "g_modbus_input_reg")
+    g_burst = BurstBufferStruct.in_dll(system_lib, "g_burst_buffer")
+
+    assert g_sys.open_loop_mode == 0
+    assert abs(g_sys.open_loop_coast_pos_mm - 400.0) < 1e-4
+
+    # Set coast mode (1) and invalid mode (99 -> 0)
+    g_hold.open_loop_mode = 1
+    system_lib.modbus_slave_sync_buffers()
+    assert g_sys.open_loop_mode == 1
+
+    g_hold.open_loop_mode = 99
+    system_lib.modbus_slave_sync_buffers()
+    assert g_sys.open_loop_mode == 0
+
+    # Coast pos clamping [50.0, 536.0]
+    g_hold.open_loop_coast_pos_hi, g_hold.open_loop_coast_pos_lo = float_to_regs(10.0)
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(g_sys.open_loop_coast_pos_mm - 50.0) < 1e-4
+
+    g_hold.open_loop_coast_pos_hi, g_hold.open_loop_coast_pos_lo = float_to_regs(600.0)
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(g_sys.open_loop_coast_pos_mm - 536.0) < 1e-4
+
+    # Sample duty_pct indexed read
+    g_burst.sample_count = 2
+    g_burst.samples[0].duty_pct = 75.0
+    g_burst.samples[1].duty_pct = 0.0
+
+    g_hold.burst_read_index = 0
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(regs_to_float(g_in.sample_duty_hi, g_in.sample_duty_lo) - 75.0) < 1e-4
+
+    g_hold.burst_read_index = 1
+    system_lib.modbus_slave_sync_buffers()
+    assert abs(regs_to_float(g_in.sample_duty_hi, g_in.sample_duty_lo) - 0.0) < 1e-4
+
 

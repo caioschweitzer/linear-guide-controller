@@ -67,8 +67,13 @@ static void start_button_debounce_task(void *pvParameters) {
                 current_state = reading;
                 // Rising edge detected (button pressed: LOW -> HIGH, Active-HIGH)
                 if (current_state != 0) {
-                    // Request transition to MOVING
-                    shared_data_request_state_change(MACHINE_STATE_MOVING);
+                    // Toggle between IDLE and MOVING
+                    machine_state_t state = shared_data_get_state();
+                    if (state == MACHINE_STATE_MOVING) {
+                        shared_data_request_state_change(MACHINE_STATE_IDLE);
+                    } else if (state == MACHINE_STATE_IDLE) {
+                        shared_data_request_state_change(MACHINE_STATE_MOVING);
+                    }
                 }
             }
         }
@@ -91,12 +96,13 @@ esp_err_t gpio_safety_init(void) {
     };
     gpio_config(&io_conf_start);
 
-    // 1b. Configure GPIO 37 (Home Sensor) - Input with Internal Pull-down (Active-HIGH)
+    // 1b. Configure GPIO 37 (Home Sensor) - Input with Internal Pull-up
+    // NC (NF) sensor wired to GND: closed (not home) = LOW (0), open (home/broken wire) = HIGH (1)
     gpio_config_t io_conf_home = {
         .pin_bit_mask = (1ULL << GPIO_HOME_PIN),
         .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE
     };
     gpio_config(&io_conf_home);

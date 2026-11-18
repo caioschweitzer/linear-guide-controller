@@ -17,6 +17,7 @@ import pyqtgraph as pg
 from tools.supervisory.modbus_worker import (
     ModbusWorker, list_serial_ports, DEFAULT_SERIAL_PORT, DEFAULT_BAUDRATE
 )
+from tools.supervisory.curve_utils import compute_normalized_curve, compute_sine_setpoint
 
 # Dark Theme QSS Stylesheet
 DARK_STYLESHEET = """
@@ -482,13 +483,28 @@ class SupervisoryMainWindow(QMainWindow):
         self.modbus_worker.telemetry_updated.connect(self.on_telemetry_updated)
         self.modbus_worker.connection_status_changed.connect(self.on_connection_status_changed)
         self.modbus_worker.burst_data_ready.connect(self.on_burst_data_ready)
+        self.modbus_worker.burst_status_changed.connect(self.on_burst_status_changed)
         self.modbus_worker.log_message.connect(self.append_log)
         self.modbus_worker.start()
 
         # Open-Loop Test State
         self.last_burst_samples: List[Dict[str, Any]] = []
+        self.collected_curves: List[List[Dict[str, Any]]] = []
         self.latest_position: float = 0.0
         self.latest_machine_state: int = 0
+        self._batch_active: bool = False
+        self._batch_total: int = 1
+        self._batch_pwm: float = 100.0
+        self._batch_mode: int = 0
+        self._batch_coast_pos: float = 400.0
+        self._batch_phase: str = "IDLE"
+
+        # Sine Wave Trajectory State (Closed-Loop)
+        self._sine_active: bool = False
+        self._sine_start_time: float = 0.0
+        self._sine_timer = QTimer(self)
+        self._sine_timer.setInterval(50)  # 20 Hz setpoint stream
+        self._sine_timer.timeout.connect(self._on_sine_tick)
 
         # Build UI layout
         self.init_ui()
@@ -647,6 +663,60 @@ class SupervisoryMainWindow(QMainWindow):
 
         layout.addWidget(motion_box)
 
+        # A2. Sine Wave Trajectory Group Box (Closed-Loop Setpoint Stream)
+        sine_box = QGroupBox("Trajetória Senoidal (Malha Fechada)")
+        sine_layout = QVBoxLayout(sine_box)
+
+        sine_grid = QGridLayout()
+        sine_grid.addWidget(QLabel("Centro (mm):"), 0, 0)
+        self.spin_sine_center = QDoubleSpinBox()
+        self.spin_sine_center.setRange(0.0, 670.0)
+        self.spin_sine_center.setSingleStep(10.0)
+        self.spin_sine_center.setDecimals(1)
+        self.spin_sine_center.setValue(300.0)
+        sine_grid.addWidget(self.spin_sine_center, 0, 1)
+
+        sine_grid.addWidget(QLabel("Amplitude (mm):"), 0, 2)
+        self.spin_sine_amp = QDoubleSpinBox()
+        self.spin_sine_amp.setRange(1.0, 335.0)
+        self.spin_sine_amp.setSingleStep(10.0)
+        self.spin_sine_amp.setDecimals(1)
+        self.spin_sine_amp.setValue(150.0)
+        sine_grid.addWidget(self.spin_sine_amp, 0, 3)
+
+        sine_grid.addWidget(QLabel("Freq (Hz):"), 1, 0)
+        self.spin_sine_freq = QDoubleSpinBox()
+        self.spin_sine_freq.setRange(0.05, 2.00)
+        self.spin_sine_freq.setSingleStep(0.05)
+        self.spin_sine_freq.setDecimals(2)
+        self.spin_sine_freq.setValue(0.20)
+        sine_grid.addWidget(self.spin_sine_freq, 1, 1)
+
+        sine_grid.addWidget(QLabel("Ciclos (0=∞):"), 1, 2)
+        self.spin_sine_cycles = QSpinBox()
+        self.spin_sine_cycles.setRange(0, 100)
+        self.spin_sine_cycles.setValue(0)
+        sine_grid.addWidget(self.spin_sine_cycles, 1, 3)
+        sine_layout.addLayout(sine_grid)
+
+        sine_btn_layout = QHBoxLayout()
+        self.btn_sine_start = QPushButton("〰️ Iniciar Senoide")
+        self.btn_sine_start.setObjectName("start_btn")
+        self.btn_sine_start.clicked.connect(self.start_sine_wave)
+        sine_btn_layout.addWidget(self.btn_sine_start)
+
+        self.btn_sine_stop = QPushButton("⏹ Parar Senoide")
+        self.btn_sine_stop.setEnabled(False)
+        self.btn_sine_stop.clicked.connect(lambda: self.stop_sine_wave("Parada solicitada pelo operador."))
+        sine_btn_layout.addWidget(self.btn_sine_stop)
+        sine_layout.addLayout(sine_btn_layout)
+
+        self.lbl_sine_status = QLabel("Senoide: Inativa")
+        self.lbl_sine_status.setStyleSheet("color: #A6ADC8; font-size: 11px;")
+        sine_layout.addWidget(self.lbl_sine_status)
+
+        layout.addWidget(sine_box)
+
         # Open-Loop Step Response Group Box (System Identification)
         open_loop_box = QGroupBox("Open-Loop Step Test (System Identification)")
         ol_layout = QVBoxLayout(open_loop_box)
@@ -655,8 +725,47 @@ class SupervisoryMainWindow(QMainWindow):
         self.lbl_open_loop_cond.setStyleSheet("color: #A6ADC8; font-size: 11px;")
         ol_layout.addWidget(self.lbl_open_loop_cond)
 
+        ol_params_layout = QHBoxLayout()
+        ol_params_layout.addWidget(QLabel("Degrau PWM:"))
+        self.spin_ol_pwm = QDoubleSpinBox()
+        self.spin_ol_pwm.setRange(1.0, 100.0)
+        self.spin_ol_pwm.setSingleStep(5.0)
+        self.spin_ol_pwm.setDecimals(1)
+        self.spin_ol_pwm.setValue(100.0)
+        self.spin_ol_pwm.setSuffix(" %")
+        self.spin_ol_pwm.valueChanged.connect(self._update_open_loop_button_label)
+        ol_params_layout.addWidget(self.spin_ol_pwm)
+
+        ol_params_layout.addWidget(QLabel("Curvas (N):"))
+        self.spin_ol_curves = QSpinBox()
+        self.spin_ol_curves.setRange(1, 50)
+        self.spin_ol_curves.setValue(1)
+        self.spin_ol_curves.valueChanged.connect(self._update_open_loop_button_label)
+        ol_params_layout.addWidget(self.spin_ol_curves)
+        ol_layout.addLayout(ol_params_layout)
+
+        ol_mode_layout = QHBoxLayout()
+        ol_mode_layout.addWidget(QLabel("Modo:"))
+        self.combo_ol_mode = QComboBox()
+        self.combo_ol_mode.addItem("Freio Ativo (536 mm)", 0)
+        self.combo_ol_mode.addItem("Parada Natural (Degrau -> 0%)", 1)
+        self.combo_ol_mode.currentIndexChanged.connect(self._on_open_loop_mode_changed)
+        ol_mode_layout.addWidget(self.combo_ol_mode, stretch=2)
+
+        ol_mode_layout.addWidget(QLabel("Corte 0%:"))
+        self.spin_ol_coast_pos = QDoubleSpinBox()
+        self.spin_ol_coast_pos.setRange(50.0, 536.0)
+        self.spin_ol_coast_pos.setSingleStep(10.0)
+        self.spin_ol_coast_pos.setDecimals(1)
+        self.spin_ol_coast_pos.setValue(400.0)
+        self.spin_ol_coast_pos.setSuffix(" mm")
+        self.spin_ol_coast_pos.setEnabled(False)
+        self.spin_ol_coast_pos.valueChanged.connect(self._update_open_loop_button_label)
+        ol_mode_layout.addWidget(self.spin_ol_coast_pos, stretch=1)
+        ol_layout.addLayout(ol_mode_layout)
+
         ol_btn_layout = QHBoxLayout()
-        self.btn_open_loop = QPushButton("🚀 RUN STEP TEST (100% PWM -> 536 mm / 80%)")
+        self.btn_open_loop = QPushButton("🚀 RUN STEP TEST (100.0% PWM -> 536 mm / 80%)")
         self.btn_open_loop.setObjectName("openloop_btn")
         self.btn_open_loop.setEnabled(False)
         self.btn_open_loop.clicked.connect(self.start_open_loop_test)
@@ -667,6 +776,12 @@ class SupervisoryMainWindow(QMainWindow):
         self.btn_export_csv.setEnabled(False)
         self.btn_export_csv.clicked.connect(self.export_csv_manually)
         ol_btn_layout.addWidget(self.btn_export_csv, stretch=1)
+
+        self.btn_export_norm_csv = QPushButton("📈 Export Normalizada")
+        self.btn_export_norm_csv.setObjectName("export_btn")
+        self.btn_export_norm_csv.setEnabled(False)
+        self.btn_export_norm_csv.clicked.connect(self.export_normalized_csv_manually)
+        ol_btn_layout.addWidget(self.btn_export_norm_csv, stretch=1)
 
         ol_layout.addLayout(ol_btn_layout)
         layout.addWidget(open_loop_box)
@@ -1013,11 +1128,35 @@ class SupervisoryMainWindow(QMainWindow):
         # Update Open-Loop Step Test Interlocks
         self.latest_position = pos
         self.latest_machine_state = state
-        can_start_ol = (abs(pos) <= 5.0) and (state == 0) and self.modbus_worker._connected
+        if self._sine_active and (state == 2 or not self.modbus_worker._connected):
+            self.stop_sine_wave("Emergência ou desconexão detectada.")
+        can_start_ol = (abs(pos) <= 5.0) and (state == 0) and self.modbus_worker._connected and (not self._batch_active)
         self.btn_open_loop.setEnabled(can_start_ol)
+        self.spin_ol_pwm.setEnabled(not self._batch_active)
+        self.spin_ol_curves.setEnabled(not self._batch_active)
+        self.combo_ol_mode.setEnabled(not self._batch_active)
+        self.spin_ol_coast_pos.setEnabled((not self._batch_active) and (self.combo_ol_mode.currentData() == 1))
 
-        if state == 4:
-            self.lbl_open_loop_cond.setText("Status: <font color='#FAB387'><b>TEST RUNNING (100% PWM -> 536 mm / 80%)...</b></font>")
+        if self._batch_active:
+            if state == 2:
+                self._abort_batch("Emergência detectada durante coleta em lote.")
+            elif self._batch_phase == "WAITING_HOME":
+                self.lbl_open_loop_cond.setText(
+                    f"Status: <font color='#89B4FA'><b>Curva {len(self.collected_curves)}/{self._batch_total} — Retornando ao Home...</b></font>"
+                )
+                if state == 0 and abs(pos) <= 5.0:
+                    self._batch_phase = "SETTLING"
+                    QTimer.singleShot(500, self._start_next_batch_run)
+            elif self._batch_phase == "SETTLING":
+                self.lbl_open_loop_cond.setText(
+                    f"Status: <font color='#89B4FA'><b>Estabilizando para curva {len(self.collected_curves) + 1}/{self._batch_total}...</b></font>"
+                )
+            else:
+                self.lbl_open_loop_cond.setText(
+                    f"Status: <font color='#FAB387'><b>Coletando curva {len(self.collected_curves) + 1}/{self._batch_total} ({self._batch_pwm:.1f}% PWM)...</b></font>"
+                )
+        elif state == 4:
+            self.lbl_open_loop_cond.setText(f"Status: <font color='#FAB387'><b>TEST RUNNING ({self.spin_ol_pwm.value():.1f}% PWM -> 536 mm / 80%)...</b></font>")
         elif can_start_ol:
             self.lbl_open_loop_cond.setText("Condition: <font color='#A6E3A1'><b>READY (|pos| <= 5.0 mm and IDLE)</b></font>")
         elif abs(pos) > 5.0:
@@ -1026,6 +1165,48 @@ class SupervisoryMainWindow(QMainWindow):
             self.lbl_open_loop_cond.setText("Condition: <font color='#F9E2AF'>Blocked (machine must be in IDLE)</font>")
         else:
             self.lbl_open_loop_cond.setText("Condition: <font color='#6C7086'>Waiting for connection...</font>")
+
+    def _on_open_loop_mode_changed(self):
+        is_coast = (self.combo_ol_mode.currentData() == 1)
+        self.spin_ol_coast_pos.setEnabled((not self._batch_active) and is_coast)
+        self._update_open_loop_button_label()
+
+    def _update_open_loop_button_label(self):
+        pwm = self.spin_ol_pwm.value()
+        n = self.spin_ol_curves.value()
+        is_coast = (self.combo_ol_mode.currentData() == 1)
+        target_str = f"{self.spin_ol_coast_pos.value():.0f} mm -> 0%" if is_coast else "536 mm / 80%"
+        if n > 1:
+            self.btn_open_loop.setText(f"🚀 RUN {n} CURVES ({pwm:.1f}% PWM -> {target_str})")
+        else:
+            self.btn_open_loop.setText(f"🚀 RUN STEP TEST ({pwm:.1f}% PWM -> {target_str})")
+
+    def _abort_batch(self, reason: str):
+        if not self._batch_active:
+            return
+        self._batch_active = False
+        self._batch_phase = "IDLE"
+        self.spin_ol_pwm.setEnabled(True)
+        self.spin_ol_curves.setEnabled(True)
+        self.combo_ol_mode.setEnabled(True)
+        self.spin_ol_coast_pos.setEnabled(self.combo_ol_mode.currentData() == 1)
+        self.append_log(f"⚠️ Coleta em lote interrompida ({len(self.collected_curves)}/{self._batch_total} curvas): {reason}")
+
+    def _start_next_batch_run(self):
+        if not self._batch_active or self._batch_phase != "SETTLING":
+            return
+        if not self.modbus_worker._connected or self.latest_machine_state != 0 or abs(self.latest_position) > 5.0:
+            self._abort_batch("Condição de partida não atendida após Homing.")
+            return
+        next_idx = len(self.collected_curves) + 1
+        self._batch_phase = "RUNNING_TEST"
+        self.modbus_worker.queue_open_loop_test(self._batch_pwm, self._batch_mode, self._batch_coast_pos)
+        self.append_log(f"🚀 Iniciando curva {next_idx}/{self._batch_total} ({self._batch_pwm:.1f}% PWM)...")
+
+    @pyqtSlot(int, int)
+    def on_burst_status_changed(self, burst_status: int, burst_count: int):
+        if self._batch_active and burst_status == 3:
+            self._abort_batch("Ensaio abortado pelo firmware (timeout ou emergência).")
 
     def start_open_loop_test(self):
         if not self.modbus_worker._connected:
@@ -1040,15 +1221,33 @@ class SupervisoryMainWindow(QMainWindow):
             )
             return
 
+        pwm_pct = self.spin_ol_pwm.value()
+        num_curves = self.spin_ol_curves.value()
+        mode = int(self.combo_ol_mode.currentData())
+        coast_pos = self.spin_ol_coast_pos.value()
+        batch_msg = f"Serão coletadas {num_curves} curvas consecutivas com retorno automático ao Home." if num_curves > 1 else "Será coletada 1 curva."
+        mode_msg = (
+            f"Modo: Parada Natural (degrau para 0% em {coast_pos:.1f} mm, sem freio ativo)."
+            if mode == 1 else
+            "Modo: Freio Ativo ao atingir 80% do curso (536.0 mm)."
+        )
+
         reply = QMessageBox.question(
             self,
             "Confirm Open-Loop Step Test",
-            "Deseja iniciar o ensaio de malha aberta?\n\nO motor será acionado em 100% de esforço até atingir 80% do curso (536.0 mm).\nA frenagem eletrodinâmica ativa será aplicada instantaneamente, restando mais de 134 mm de margem livre.",
+            f"Deseja iniciar o ensaio de malha aberta?\n\nNível de PWM: {pwm_pct:.1f}%\n{mode_msg}\n{batch_msg}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.modbus_worker.queue_open_loop_test()
-            self.append_log("🚀 Iniciado ensaio de malha aberta (100% PWM até 536 mm / 80% do curso).")
+            self.collected_curves = []
+            self._batch_active = True
+            self._batch_total = num_curves
+            self._batch_pwm = pwm_pct
+            self._batch_mode = mode
+            self._batch_coast_pos = coast_pos
+            self._batch_phase = "RUNNING_TEST"
+            self.modbus_worker.queue_open_loop_test(pwm_pct, mode, coast_pos)
+            self.append_log(f"🚀 Iniciado ensaio de malha aberta (Curva 1/{num_curves}, {pwm_pct:.1f}% PWM, modo={'COAST' if mode == 1 else 'BRAKE'}).")
 
     @pyqtSlot(int)
     def on_max_points_changed(self, new_max: int):
@@ -1091,39 +1290,36 @@ class SupervisoryMainWindow(QMainWindow):
         self.append_log(f"📊 Recebidas {len(samples)} amostras de malha aberta do ESP32.")
 
         if samples:
-            # Auto-expand buffer capacity if incoming burst exceeds current max_points
-            if len(samples) > self.max_points:
-                if len(samples) > self.spin_max_points.maximum():
-                    self.spin_max_points.setMaximum(len(samples))
-                self.spin_max_points.setValue(len(samples))
+            self._plot_burst_samples(samples)
 
-            times = [s["time_s"] for s in samples]
-            positions = [s["position_mm"] for s in samples]
-            velocities = [s["velocity_mm_s"] for s in samples]
-            duties = [s["duty_pct"] for s in samples]
+        if self._batch_active:
+            if samples:
+                self.collected_curves.append(samples)
+                self.btn_export_norm_csv.setEnabled(True)
+            done_count = len(self.collected_curves)
+            if done_count < self._batch_total:
+                self.append_log(f"✅ Curva {done_count}/{self._batch_total} concluída. Retornando ao Home para a próxima...")
+                self._batch_phase = "WAITING_HOME"
+                self.modbus_worker.queue_command(4)  # CMD_HOME
+                return
 
-            self.time_history.clear()
-            self.setpoint_history.clear()
-            self.position_history.clear()
-            self.velocity_history.clear()
-            self.duty_history.clear()
+            # All N curves collected
+            self._batch_active = False
+            self._batch_phase = "IDLE"
+            self.spin_ol_pwm.setEnabled(True)
+            self.spin_ol_curves.setEnabled(True)
+            self.combo_ol_mode.setEnabled(True)
+            self.spin_ol_coast_pos.setEnabled(self.combo_ol_mode.currentData() == 1)
 
-            for t, p, v, d in zip(times, positions, velocities, duties):
-                self.time_history.append(t)
-                self.setpoint_history.append(536.0)
-                self.position_history.append(p)
-                self.velocity_history.append(v)
-                self.duty_history.append(d)
+            if self._batch_total > 1:
+                self.append_log(f"🎉 Coleta de {done_count} curvas concluída! Gerando curva normalizada...")
+                self.export_normalized_csv_manually()
+                return
 
-            self.curve_setpoint.setData(list(self.time_history), list(self.setpoint_history))
-            self.curve_position.setData(list(self.time_history), list(self.position_history))
-            self.curve_velocity.setData(list(self.time_history), list(self.velocity_history))
-            self.curve_duty.setData(list(self.time_history), list(self.duty_history))
-
-            if hasattr(self, 'lbl_points_info'):
-                self.lbl_points_info.setText(f"Pontos exibidos: {len(self.time_history)} / {self.max_points}")
-
-            # Prompt for file save
+        if samples:
+            self.collected_curves = [samples]
+            self.btn_export_norm_csv.setEnabled(True)
+            # Prompt for file save (single curve)
             filepath, _ = QFileDialog.getSaveFileName(
                 self,
                 "Salvar Curva de Malha Aberta",
@@ -1132,6 +1328,83 @@ class SupervisoryMainWindow(QMainWindow):
             )
             if filepath:
                 self._write_csv_file(filepath, samples)
+
+    def _plot_burst_samples(self, samples: List[Dict[str, Any]]):
+        # Auto-expand buffer capacity if incoming burst exceeds current max_points
+        if len(samples) > self.max_points:
+            if len(samples) > self.spin_max_points.maximum():
+                self.spin_max_points.setMaximum(len(samples))
+            self.spin_max_points.setValue(len(samples))
+
+        times = [s["time_s"] for s in samples]
+        positions = [s["position_mm"] for s in samples]
+        velocities = [s["velocity_mm_s"] for s in samples]
+        duties = [s["duty_pct"] for s in samples]
+
+        self.time_history.clear()
+        self.setpoint_history.clear()
+        self.position_history.clear()
+        self.velocity_history.clear()
+        self.duty_history.clear()
+
+        for t, p, v, d in zip(times, positions, velocities, duties):
+            self.time_history.append(t)
+            self.setpoint_history.append(536.0)
+            self.position_history.append(p)
+            self.velocity_history.append(v)
+            self.duty_history.append(d)
+
+        self.curve_setpoint.setData(list(self.time_history), list(self.setpoint_history))
+        self.curve_position.setData(list(self.time_history), list(self.position_history))
+        self.curve_velocity.setData(list(self.time_history), list(self.velocity_history))
+        self.curve_duty.setData(list(self.time_history), list(self.duty_history))
+
+        if hasattr(self, 'lbl_points_info'):
+            self.lbl_points_info.setText(f"Pontos exibidos: {len(self.time_history)} / {self.max_points}")
+
+    def export_normalized_csv_manually(self):
+        curves = self.collected_curves if self.collected_curves else ([self.last_burst_samples] if self.last_burst_samples else [])
+        if not curves:
+            QMessageBox.information(self, "Sem Dados", "Nenhuma curva coletada até o momento.")
+            return
+
+        pwm_val = self._batch_pwm if self.collected_curves else self.spin_ol_pwm.value()
+        norm_samples = compute_normalized_curve(curves, duty_pct=pwm_val)
+        if not norm_samples:
+            QMessageBox.warning(self, "Sem Dados", "Não foi possível gerar a curva normalizada.")
+            return
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar Curva Normalizada",
+            "curva_malha_aberta_normalizada.csv",
+            "Arquivos CSV (*.csv);;Todos os Arquivos (*)"
+        )
+        if filepath:
+            self._write_normalized_csv_file(filepath, norm_samples)
+
+    def _write_normalized_csv_file(self, filepath: str, norm_samples: List[Dict[str, Any]]):
+        try:
+            with open(filepath, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "time_s", "position_mean_mm", "velocity_mean_mm_s",
+                    "position_norm", "velocity_norm", "duty_pct", "curve_count"
+                ])
+                for s in norm_samples:
+                    writer.writerow([
+                        s["time_s"], s["position_mean_mm"], s["velocity_mean_mm_s"],
+                        s["position_norm"], s["velocity_norm"], s["duty_pct"], s["curve_count"]
+                    ])
+            self.append_log(f"📈 Curva normalizada salva com sucesso em {filepath}")
+            QMessageBox.information(
+                self,
+                "Exportação Concluída",
+                f"Curva normalizada salva com sucesso:\n{filepath}\nCurvas: {norm_samples[0]['curve_count']} | Pontos: {len(norm_samples)}"
+            )
+        except Exception as e:
+            self.append_log(f"❌ Erro ao salvar curva normalizada: {e}")
+            QMessageBox.critical(self, "Erro de Exportação", f"Não foi possível salvar o arquivo:\n{e}")
 
     def export_csv_manually(self):
         if not self.last_burst_samples:
@@ -1177,6 +1450,10 @@ class SupervisoryMainWindow(QMainWindow):
             self.sp_spinbox.blockSignals(False)
 
     def send_command(self, cmd_code: int):
+        if self._sine_active and cmd_code in (2, 3, 4):
+            self.stop_sine_wave(f"Interrompida pelo comando {cmd_code}.")
+        if cmd_code == 2 and self._batch_active:
+            self._abort_batch("Parada manual solicitada pelo operador.")
         # Transmit target setpoint value first if starting motion
         if cmd_code == 1:
             target_sp = self.sp_spinbox.value()
@@ -1185,8 +1462,79 @@ class SupervisoryMainWindow(QMainWindow):
         self.modbus_worker.queue_command(cmd_code)
 
     def send_emergency_stop(self):
+        if self._sine_active:
+            self.stop_sine_wave("Emergência acionada pelo operador.")
+        if self._batch_active:
+            self._abort_batch("Emergência acionada pelo operador.")
         self.modbus_worker.queue_emergency()
         self.append_log("🚨 EMERGENCY STOP ACTIVATED FROM SUPERVISORY UI!")
+
+    def start_sine_wave(self):
+        if not self.modbus_worker._connected:
+            QMessageBox.warning(self, "Disconnected", "Connect to the Modbus RTU slave first.")
+            return
+        if self._batch_active or self.latest_machine_state in (2, 3, 4):
+            QMessageBox.warning(self, "Blocked", "Machine must be in IDLE or MOVING (no fault/homing/open-loop active).")
+            return
+
+        center = self.spin_sine_center.value()
+        amp = self.spin_sine_amp.value()
+        freq = self.spin_sine_freq.value()
+        cycles = self.spin_sine_cycles.value()
+
+        self._sine_active = True
+        self._sine_start_time = time.time()
+        self.btn_sine_start.setEnabled(False)
+        self.btn_sine_stop.setEnabled(True)
+        self.spin_sine_center.setEnabled(False)
+        self.spin_sine_amp.setEnabled(False)
+        self.spin_sine_freq.setEnabled(False)
+        self.spin_sine_cycles.setEnabled(False)
+
+        sp0 = compute_sine_setpoint(0.0, center, amp, freq)
+        self.sp_spinbox.setValue(sp0)
+        self.modbus_worker.queue_setpoint(sp0)
+        if self.latest_machine_state != 1:
+            self.modbus_worker.queue_command(1)  # CMD_START
+        self._sine_timer.start()
+        cyc_str = f"{cycles} ciclos" if cycles > 0 else "contínuo"
+        self.lbl_sine_status.setText(f"Senoide: <font color='#A6E3A1'><b>ATIVA ({center:.1f} ± {amp:.1f} mm @ {freq:.2f} Hz, {cyc_str})</b></font>")
+        self.append_log(f"〰️ Senoide iniciada: centro={center:.1f} mm, amp={amp:.1f} mm, freq={freq:.2f} Hz ({cyc_str}).")
+
+    def stop_sine_wave(self, reason: str = ""):
+        if not self._sine_active:
+            return
+        self._sine_timer.stop()
+        self._sine_active = False
+        self.btn_sine_start.setEnabled(True)
+        self.btn_sine_stop.setEnabled(False)
+        self.spin_sine_center.setEnabled(True)
+        self.spin_sine_amp.setEnabled(True)
+        self.spin_sine_freq.setEnabled(True)
+        self.spin_sine_cycles.setEnabled(True)
+        self.lbl_sine_status.setText("Senoide: Inativa")
+        if reason:
+            self.append_log(f"⏹ Senoide encerrada: {reason}")
+
+    def _on_sine_tick(self):
+        if not self._sine_active:
+            return
+        elapsed = time.time() - self._sine_start_time
+        center = self.spin_sine_center.value()
+        amp = self.spin_sine_amp.value()
+        freq = self.spin_sine_freq.value()
+        cycles = self.spin_sine_cycles.value()
+
+        if cycles > 0 and elapsed * freq >= cycles:
+            final_sp = compute_sine_setpoint(0.0, center, amp, freq)
+            self.sp_spinbox.setValue(final_sp)
+            self.modbus_worker.queue_setpoint(final_sp)
+            self.stop_sine_wave(f"{cycles} ciclo(s) concluído(s).")
+            return
+
+        sp = compute_sine_setpoint(elapsed, center, amp, freq)
+        self.sp_spinbox.setValue(sp)
+        self.modbus_worker.queue_setpoint(sp)
 
     def apply_pid_gains(self):
         kp = self.kp_spin.value()
@@ -1199,5 +1547,8 @@ class SupervisoryMainWindow(QMainWindow):
         self.log_console.append(f"{timestamp_str} {text}")
 
     def closeEvent(self, event):
+        if self._sine_active:
+            self._sine_timer.stop()
+            self._sine_active = False
         self.modbus_worker.stop_thread()
         event.accept()

@@ -60,6 +60,11 @@ esp_err_t modbus_slave_init(void) {
   float_to_registers(0.05f, &g_modbus_holding_reg.kd_hi,
                      &g_modbus_holding_reg.kd_lo);
   g_modbus_holding_reg.burst_read_index = 0;
+  float_to_registers(100.0f, &g_modbus_holding_reg.open_loop_pwm_hi,
+                     &g_modbus_holding_reg.open_loop_pwm_lo);
+  g_modbus_holding_reg.open_loop_mode = OPEN_LOOP_MODE_BRAKE;
+  float_to_registers(400.0f, &g_modbus_holding_reg.open_loop_coast_pos_hi,
+                     &g_modbus_holding_reg.open_loop_coast_pos_lo);
 
 #ifndef HOST_TEST
   // 1. Suppress ASCII logging: USB/UART carries binary Modbus RTU frames
@@ -136,6 +141,45 @@ void modbus_slave_sync_buffers(void) {
     float_to_registers(g_system_data.kd, &g_modbus_holding_reg.kd_hi,
                        &g_modbus_holding_reg.kd_lo);
 
+    // Synchronize Open-Loop Step PWM (%) with Modbus holding registers [1.0, 100.0]
+    float mb_ol_pwm = registers_to_float(g_modbus_holding_reg.open_loop_pwm_hi,
+                                         g_modbus_holding_reg.open_loop_pwm_lo);
+    if (isnan(mb_ol_pwm) || isinf(mb_ol_pwm)) {
+      mb_ol_pwm = 100.0f;
+    } else if (mb_ol_pwm < 1.0f) {
+      mb_ol_pwm = 1.0f;
+    } else if (mb_ol_pwm > 100.0f) {
+      mb_ol_pwm = 100.0f;
+    }
+    g_system_data.open_loop_pwm = mb_ol_pwm;
+    float_to_registers(g_system_data.open_loop_pwm,
+                       &g_modbus_holding_reg.open_loop_pwm_hi,
+                       &g_modbus_holding_reg.open_loop_pwm_lo);
+
+    // Synchronize Open-Loop Mode (0: BRAKE, 1: COAST)
+    uint16_t mb_ol_mode = g_modbus_holding_reg.open_loop_mode;
+    if (mb_ol_mode != OPEN_LOOP_MODE_COAST) {
+      mb_ol_mode = OPEN_LOOP_MODE_BRAKE;
+    }
+    g_system_data.open_loop_mode = mb_ol_mode;
+    g_modbus_holding_reg.open_loop_mode = mb_ol_mode;
+
+    // Synchronize Open-Loop Coast Step-Down Position [50.0, 536.0] mm
+    float mb_coast_pos = registers_to_float(
+        g_modbus_holding_reg.open_loop_coast_pos_hi,
+        g_modbus_holding_reg.open_loop_coast_pos_lo);
+    if (isnan(mb_coast_pos) || isinf(mb_coast_pos)) {
+      mb_coast_pos = 400.0f;
+    } else if (mb_coast_pos < 50.0f) {
+      mb_coast_pos = 50.0f;
+    } else if (mb_coast_pos > 536.0f) {
+      mb_coast_pos = 536.0f;
+    }
+    g_system_data.open_loop_coast_pos_mm = mb_coast_pos;
+    float_to_registers(g_system_data.open_loop_coast_pos_mm,
+                       &g_modbus_holding_reg.open_loop_coast_pos_hi,
+                       &g_modbus_holding_reg.open_loop_coast_pos_lo);
+
     // Populate Modbus Input Registers from telemetry
     float_to_registers(g_system_data.current_position,
                        &g_modbus_input_reg.pos_hi, &g_modbus_input_reg.pos_lo);
@@ -163,6 +207,9 @@ void modbus_slave_sync_buffers(void) {
       float_to_registers(g_burst_buffer.samples[r_idx].velocity,
                          &g_modbus_input_reg.sample_vel_hi,
                          &g_modbus_input_reg.sample_vel_lo);
+      float_to_registers(g_burst_buffer.samples[r_idx].duty_pct,
+                         &g_modbus_input_reg.sample_duty_hi,
+                         &g_modbus_input_reg.sample_duty_lo);
     } else {
       g_modbus_input_reg.sample_time_hi = 0;
       g_modbus_input_reg.sample_time_lo = 0;
@@ -170,6 +217,8 @@ void modbus_slave_sync_buffers(void) {
                          &g_modbus_input_reg.sample_pos_lo);
       float_to_registers(0.0f, &g_modbus_input_reg.sample_vel_hi,
                          &g_modbus_input_reg.sample_vel_lo);
+      float_to_registers(0.0f, &g_modbus_input_reg.sample_duty_hi,
+                         &g_modbus_input_reg.sample_duty_lo);
     }
 
     // Update Discrete Inputs register (Bit 0: E-Stop, Bit 1: Start, Bit 2: Safety Enable, Bit 3: Home Sensor)
