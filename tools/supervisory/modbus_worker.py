@@ -52,6 +52,7 @@ class ModbusWorker(QThread):
         self._command_queue: queue.Queue = queue.Queue()
         self._last_burst_status: int = 0
         self._is_downloading_burst: bool = False
+        self._last_open_loop_pwm: float = 100.0
 
     def set_connection_params(self, host: str = "192.168.1.100", port: int = 502, slave_id: int = 1):
         self.host = host
@@ -74,8 +75,16 @@ class ModbusWorker(QThread):
     def queue_command(self, cmd_code: int):
         self._command_queue.put({"action": "WRITE_COMMAND", "value": cmd_code})
 
-    def queue_open_loop_test(self):
-        self._command_queue.put({"action": "OPEN_LOOP_TEST"})
+    def queue_open_loop_test(self, pwm_pct: float = 100.0, mode: int = 0, coast_pos_mm: float = 400.0):
+        clamped_pwm = max(1.0, min(100.0, float(pwm_pct)))
+        valid_mode = 1 if int(mode) == 1 else 0
+        clamped_coast = max(50.0, min(536.0, float(coast_pos_mm)))
+        self._command_queue.put({
+            "action": "OPEN_LOOP_TEST",
+            "pwm": clamped_pwm,
+            "mode": valid_mode,
+            "coast_pos_mm": clamped_coast,
+        })
 
     def queue_emergency(self):
         self._command_queue.put({"action": "WRITE_EMERGENCY"})
@@ -135,6 +144,10 @@ class ModbusWorker(QThread):
                 elif action == "WRITE_EMERGENCY" and self._connected:
                     self._do_write_emergency()
                 elif action == "OPEN_LOOP_TEST" and self._connected:
+                    pwm_pct = cmd.get("pwm", 100.0)
+                    mode = cmd.get("mode", 0)
+                    coast_pos = cmd.get("coast_pos_mm", 400.0)
+                    self._do_write_open_loop_params(pwm_pct, mode, coast_pos)
                     self._do_write_command(5)
                 elif action == "WRITE_PID" and self._connected:
                     self._do_write_pid(cmd["kp"], cmd["ki"], cmd["kd"])
@@ -223,6 +236,24 @@ class ModbusWorker(QThread):
         except Exception as e:
             self.log_message.emit(f"Emergency coil trigger warning: {e}")
 
+    def _do_write_open_loop_params(self, pwm_pct: float, mode: int = 0, coast_pos_mm: float = 400.0):
+        clamped = max(1.0, min(100.0, float(pwm_pct)))
+        valid_mode = 1 if int(mode) == 1 else 0
+        clamped_coast = max(50.0, min(536.0, float(coast_pos_mm)))
+
+        pwm_hi, pwm_lo = float_to_registers(clamped)
+        coast_hi, coast_lo = float_to_registers(clamped_coast)
+        payload = [pwm_hi, pwm_lo, valid_mode, coast_hi, coast_lo]
+        res = self._client.write_registers(address=0x000A, values=payload, slave=self.slave_id)
+        if hasattr(res, "isError") and res.isError():
+            self.log_message.emit(f"Failed to write open-loop params (PWM {clamped:.1f}%, mode {valid_mode})")
+        else:
+            self._last_open_loop_pwm = clamped
+            mode_str = "COAST" if valid_mode == 1 else "BRAKE"
+            self.log_message.emit(
+                f"Set Open-Loop -> PWM: {clamped:.1f}%, Mode: {mode_str}, CutPos: {clamped_coast:.1f} mm"
+            )
+
     def _do_write_pid(self, kp: float, ki: float, kd: float):
         kp_hi, kp_lo = float_to_registers(kp)
         ki_hi, ki_lo = float_to_registers(ki)
@@ -245,19 +276,20 @@ class ModbusWorker(QThread):
             for i in range(count):
                 # Write sample index to holding register 0x0009
                 self._client.write_register(address=0x0009, value=i, slave=self.slave_id)
-                # Read sample input registers (0x0009 to 0x000E: 6 registers)
-                res = self._client.read_input_registers(address=0x0009, count=6, slave=self.slave_id)
+                # Read sample input registers (0x0009 to 0x0010: 8 registers: time, pos, vel, duty)
+                res = self._client.read_input_registers(address=0x0009, count=8, slave=self.slave_id)
                 if hasattr(res, "isError") and res.isError():
                     continue
                 regs = res.registers
                 time_ms = ((regs[0] & 0xFFFF) << 16) | (regs[1] & 0xFFFF)
                 pos = registers_to_float(regs[2], regs[3])
                 vel = registers_to_float(regs[4], regs[5])
+                sample_duty = registers_to_float(regs[6], regs[7]) if len(regs) >= 8 else self._last_open_loop_pwm
                 samples.append({
                     "time_s": round(time_ms / 1000.0, 3),
                     "position_mm": round(pos, 3),
                     "velocity_mm_s": round(vel, 3),
-                    "duty_pct": 100.0
+                    "duty_pct": round(sample_duty, 2)
                 })
             self.log_message.emit(f"✅ Download concluído: {len(samples)} pontos recebidos com sucesso.")
             self.burst_data_ready.emit(samples)

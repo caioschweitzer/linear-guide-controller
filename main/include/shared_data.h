@@ -15,6 +15,7 @@ typedef void* SemaphoreHandle_t;
 #define pdTRUE true
 #define pdFALSE false
 #define pdMS_TO_TICKS(ms) ((TickType_t)(ms))
+#define GPIO_NUM_37 37
 #define GPIO_NUM_16 16
 #define GPIO_NUM_12 12
 #define GPIO_NUM_11 11
@@ -30,7 +31,7 @@ extern "C" {
 
 #define GPIO_EMERGENCY_PIN     GPIO_NUM_12
 #define GPIO_START_PIN         GPIO_NUM_11
-#define GPIO_HOME_PIN          GPIO_NUM_16
+#define GPIO_HOME_PIN          GPIO_NUM_37
 #define GPIO_SAFETY_ENABLE_PIN GPIO_NUM_13
 
 typedef enum {
@@ -41,7 +42,10 @@ typedef enum {
     MACHINE_STATE_OPEN_LOOP_TEST = 4
 } machine_state_t;
 
-#define BURST_BUFFER_MAX_SAMPLES 550
+#define BURST_BUFFER_MAX_SAMPLES 825
+
+#define OPEN_LOOP_MODE_BRAKE 0
+#define OPEN_LOOP_MODE_COAST 1
 
 typedef enum {
     BURST_STATUS_IDLE = 0,
@@ -54,6 +58,7 @@ typedef struct {
     uint32_t time_ms;
     float position;
     float velocity;
+    float duty_pct;
 } open_loop_sample_t;
 
 typedef struct {
@@ -71,8 +76,11 @@ typedef struct {
     float kp;                 // Proportional gain
     float ki;                 // Integral gain
     float kd;                 // Derivative gain
+    float open_loop_pwm;      // Open-loop step test PWM % (1.0 to 100.0)
+    float open_loop_coast_pos_mm; // Step-down position for coast mode (50.0 to 536.0 mm)
+    uint16_t open_loop_mode;  // 0: Brake at 80%, 1: Coast to natural stop
     uint16_t machine_state;   // 0: IDLE, 1: MOVING, 2: EMERGENCY
-    bool button_estop;        // Discrete Input 0x0000 (0: Active, 1: Released)
+    bool button_estop;        // Discrete Input 0x0000 (1: Active/Pressed, 0: Normal/Released)
     bool button_start;        // Discrete Input 0x0001 (1: Pressed, 0: Released)
     bool safety_enable;       // Discrete Input 0x0002 (1: Enabled, 0: Disabled)
     bool led_status;          // Coil 0x0000 (1: ON, 0: OFF)
