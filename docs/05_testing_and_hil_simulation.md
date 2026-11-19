@@ -8,7 +8,7 @@ To enable rapid automated testing on Linux continuous integration (CI) servers w
                        HOST AUTOMATED TEST PIPELINE
  ┌─────────────────────────────────────────────────────────────────────────┐
  │                            pytest Test Suite                            │
- │                        (tests/test_*.py - 37 tests)                     │
+ │                        (tests/test_*.py - 62 tests)                     │
  └─────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
@@ -48,9 +48,9 @@ gcc -shared -fPIC -O2 -DHOST_TEST \
 
 ---
 
-## 3. Comprehensive Breakdown of the 37 Pytest Test Cases
+## 3. Comprehensive Breakdown of the 62 Pytest Test Cases
 
-The test suite consists of 37 unit and integration tests distributed across 8 test modules. Tests requiring live hardware (TCP socket to ESP32) are automatically **skipped** when no target is reachable; all host-native tests always pass:
+The test suite consists of 62 unit and integration tests distributed across 10 test modules. Tests requiring live hardware (TCP socket to ESP32) are automatically **skipped** when no target is reachable; all 54 host-native tests always pass:
 
 ### 3.1 `test_encoder_pcnt.py` (4 tests)
 - `test_encoder_initialization_and_zero_reading`: Validates initial tick count is zero after driver setup.
@@ -98,16 +98,17 @@ The test suite consists of 37 unit and integration tests distributed across 8 te
 - `test_state_machine_emergency_lockout_rejection`: Ensures all start/move requests are rejected while in `EMERGENCY`.
 - `test_state_machine_safe_reset`: Validates level-checked reset out of `EMERGENCY` state.
 
-### 3.8 `test_supervisory_ui.py` (4 tests)
-- `test_ieee754_float_conversion_roundtrip`: Tests 32-bit float encoding to 2 × uint16 registers and back.
-- `test_modbus_worker_connection_params`: Verifies `set_connection_params()` accepts IP/port/slave ID.
-- `test_modbus_worker_command_queue`: Tests that `queue_setpoint()`, `queue_command()`, `queue_pid_gains()`, and `queue_emergency()` enqueue correct action dicts.
-- `test_modbus_worker_lifecycle`: Verifies the `QThread` starts, runs without errors, and shuts down cleanly.
+### 3.8 `test_open_loop_test.py` (7 tests)
+- Validates open-loop transition preconditions, `CMD_OPEN_LOOP_TEST`, indexed burst buffer reads, CSV export format, 80% travel geometry (536.0 mm / 825 samples), `open_loop_pwm` clamping, and `open_loop_mode` / `coast_pos` / `sample_duty` register sync.
 
-### 3.9 `test_system_integration.py` (3 tests)
-- `test_system_boot_sequence`: Simulates complete system boot and initial telemetry hydration.
-- `test_closed_loop_moving_state`: Simulates closed-loop position regulation to target setpoint.
-- `test_emergency_estop_interruption`: Simulates physical E-stop button press during active movement, verifying instant motor cutoff and lockout.
+### 3.9 `test_open_loop_multi_curve.py` (8 tests)
+- Validates `ModbusWorker` multi-register open-loop writes (`0x000A`–`0x000E`) and per-sample `duty_pct` download, `compute_normalized_curve` ($N=1$, $N>1$, unequal lengths, constant/empty), `compute_sine_setpoint`, and headless PyQt6 tests for multi-curve batching and sine wave trajectory.
+
+### 3.10 `test_supervisory_ui.py` (10 tests)
+- Validates IEEE-754 float round-trips, `ModbusWorker` TCP connection params, command queueing, thread lifecycle, `DigitalDisplayCard` widget, telemetry updates, circular buffer resizing, burst auto-expansion, and Dark/Light theme switching.
+
+### 3.11 `test_system_integration.py` (7 tests)
+- Simulates complete system boot, closed-loop moving state, physical E-stop interruption, homing state transition, emergency abort during homing, setpoint clamping, and home sensor detection logic.
 
 ---
 
@@ -118,11 +119,11 @@ The test suite consists of 37 unit and integration tests distributed across 8 te
 cd /path/to/controlador_guia_linear
 PYTHONPATH=. tests/.venv/bin/pytest tests/ -v
 ```
-Expected result: **29 passed, 8 skipped** (hardware-in-the-loop tests skipped gracefully).
+Expected result: **54 passed, 8 skipped** (hardware-in-the-loop tests skipped gracefully).
 
 ### 4.2 Full HIL Tests (Live ESP32 via Ethernet)
 ```bash
 MODBUS_HOST=192.168.1.100 MODBUS_PORT=502 \
 PYTHONPATH=. tests/.venv/bin/pytest tests/ -v
 ```
-All 37 tests should pass when the ESP32 is connected to the network and a DHCP lease has been obtained.
+All 62 tests should pass when the ESP32 is connected via Ethernet (`192.168.1.100:502`).

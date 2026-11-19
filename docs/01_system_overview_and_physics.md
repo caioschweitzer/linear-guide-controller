@@ -65,12 +65,12 @@ The system is calibrated around a lead-screw linear guide driven by a DC motor e
 ```mermaid
 graph LR
     subgraph Host / Interface
-        MB[Modbus RTU Master]
+        MB[Modbus TCP Master / Supervisory]
         LCD[HD44780 I2C Display]
     end
 
     subgraph ESP32-S3 Microcontroller
-        MB_Task[Core 0: Modbus & IHM Task]
+        MB_Task[Core 0: Modbus TCP & IHM Task]
         PID[Core 1: 100 Hz PID Control Task]
         EMA[Velocity EMA Filter]
     end
@@ -80,10 +80,10 @@ graph LR
         DC[DC Motor + Lead Screw Rail]
         ENC[Optical Encoder GPIO 14, 15]
         PCNT[PCNT Hardware Counter]
-        SENS[Limit / E-Stop Switches GPIO 11, 12]
+        SENS[Limit / Home / E-Stop Switches GPIO 11, 12, 37]
     end
 
-    MB <-->|RS485 UART0| MB_Task
+    MB <-->|W5500 Ethernet TCP:502| MB_Task
     MB_Task <-->|Shared Mutex| PID
     PID -->|PWM & Direction| PWM
     PWM --> DC
@@ -128,7 +128,7 @@ $$v_{\text{filtered}}(k) = \alpha \cdot v_{\text{raw}}(k) + (1 - \alpha) \cdot v
 
 ### 4.1 Fixed-Point Serialization
 
-Modbus RTU Holding and Input registers transmit 32-bit floating-point metrics (`position` and `velocity`) split across two 16-bit registers using Big-Endian byte order.
+Modbus TCP Holding and Input registers transmit 32-bit floating-point metrics (`position` and `velocity`) split across two 16-bit registers using Big-Endian byte order.
 
 Additionally, internal telemetry structures convert millimeters to fixed-point integer micro-units ($10^{-3}\text{ mm}$) for atomic transport when required:
 

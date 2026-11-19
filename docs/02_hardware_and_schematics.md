@@ -12,12 +12,12 @@ The ESP32-S3 microcontroller communicates with sensors, actuators, user interfac
 | **Motor Direction IN1** | `GPIO 5` | Digital Output | Direction Control Signal 1 |
 | **Motor Direction IN2** | `GPIO 6` | Digital Output | Direction Control Signal 2 |
 | **Status LED Indicator** | `GPIO 7` | Digital Output | Active-HIGH Output (System State LED) |
-| **Start Button** | `GPIO 11` | Digital Input | Active-LOW (Internal Pull-Up, Debounced) |
-| **Emergency Stop Button** | `GPIO 12` | Interrupt Input | Active-LOW (Internal Pull-Up, Negedge ISR) |
+| **Start Button** | `GPIO 11` | Digital Input | Active-HIGH (Internal Pull-Down, 50 ms Debounced, Toggles `IDLE <-> MOVING`) |
+| **Emergency Stop Button** | `GPIO 12` | Interrupt Input | Active-HIGH (Internal Pull-Down, Posedge ISR) |
 | **Driver Safety Cutoff** | `GPIO 13` | Digital Output | Active-HIGH (Hardware MOSFET Gate Enable) |
 | **Encoder Phase A** | `GPIO 14` | Digital Input | Quadrature A (Internal Pull-Up) |
 | **Encoder Phase B** | `GPIO 15` | Digital Input | Quadrature B (Internal Pull-Up) |
-| **Home Sensor** | `GPIO 16` | Digital Input | Active-LOW / 0V (NC Magnetic Sensor, +3.3V supply, Internal Pull-Down) |
+| **Home Sensor** | `GPIO 37` | Digital Input | Active-HIGH when triggered (NC/NF Sensor wired to GND, Internal Pull-Up) |
 | **W5500 INT** | `GPIO 17` | Input | WIZ550io Interrupt (Active-Low, Ethernet Events) |
 | **W5500 SPI SCLK** | `GPIO 18` | SPI2 Clock | SPI2 Clock to WIZ550io (10 MHz) |
 | **W5500 SPI MISO** | `GPIO 10` | SPI2 Input | SPI2 Master In / Slave Out |
@@ -34,17 +34,18 @@ The ESP32-S3 microcontroller communicates with sensors, actuators, user interfac
 To achieve true physical safety independent of FreeRTOS task scheduling or software lockups, `GPIO 13` acts as a direct hardware gate to the H-Bridge motor driver enable pin:
 
 ```
-                  +3.3V / +5V Power Rail
+                  +3.3V Power Rail
                            │
                     ┌──────┴──────┐
-                    │ Push-Button │  (Normally Closed / Active-Low)
+                    │ Push-Button │  (Normally Open / Active-HIGH)
                     │  (E-Stop)   │
                     └──────┬──────┘
                            │
    ESP32-S3 GPIO 12 ◄──────┴───────┐
-   (Negedge ISR)                   │
+   (Posedge ISR)                   │
                              ┌─────┴─────┐
-                             │ 10kΩ Pull │
+                             │ Internal  │
+                             │ Pull-Down │
                              └─────┬─────┘
                                   GND
 
@@ -58,36 +59,29 @@ To achieve true physical safety independent of FreeRTOS task scheduling or softw
 
 ### Safety Interlock Behavior:
 1. Under normal operation (`IDLE` / `MOVING`), `GPIO 13` is set to `HIGH` (+3.3V), keeping the H-bridge driver enabled.
-2. When the Emergency Stop button is pressed (`GPIO 12` pulled `LOW`), the IRAM-resident interrupt (`gpio12_emergency_isr`) immediately executes in $< 1\ \mu\text{s}$, driving `GPIO 13` `LOW` (0V).
+2. When the Emergency Stop button is pressed (`GPIO 12` driven `HIGH`), the IRAM-resident interrupt (`gpio12_emergency_isr`) immediately executes in $< 1\ \mu\text{s}$, driving `GPIO 13` `LOW` (0V).
 3. The N-MOSFET turns off instantly, cutting power to the H-Bridge motor driver regardless of PWM signals.
 
-### 2.1 Magnetic Home Sensor Circuitry
+### 2.1 Home Sensor Circuitry (NC / NF to GND)
 
-The mechanical datum (Home) is detected by a magnetic sensor with a contact that is Normally Closed (NC) in the absence of a magnetic field, connected between +3.3V and `GPIO 16`:
+The mechanical datum (Home) is detected by a Normally Closed (NC / NF) sensor wired between **GND** and **`GPIO 37`** with the ESP32-S3 internal **pull-up** resistor enabled:
 
 ```text
-       +3.3V Power Rail
+       +3.3V (Internal Pull-Up ~45kΩ)
              │
-             ▼
-        ┌─────────┐
-        │ SENSOR  │ (NC Magnetic Sensor / Closed in free air)
-        └────┬────┘
-             │
-             ├──────────────────────────► ESP32-S3 GPIO 16 (Digital Input)
+             ├──────────────────────────► ESP32-S3 GPIO 37 (Digital Input)
              │
         ┌────┴────┐
-        │  45kΩ   │ (Internal Pull-Down Resistor in ESP32-S3)
-        │ PULL-   │
-        │  DOWN   │
+        │ SENSOR  │ (NC / NF Sensor — Closed to GND when away from Home)
         └────┬────┘
-             ▼
+             │
             GND
 ```
 
 #### Sensor Operational Logic:
-1. **Carriage Away from Home (Free Air / Repouso)**: The magnetic contact is closed, applying +3.3V directly to `GPIO 16` (`gpio == 1`). The firmware interprets this as `CLEAR` / un-triggered.
-2. **Carriage at Home Datum (Magnet Present)**: The magnetic field opens the NC contact, disconnecting the 3.3V rail. The internal pull-down resistor pulls `GPIO 16` to 0V (`gpio == 0`). The firmware interprets this as `HOME DETECTED`, engages active braking (`motor_brake`), clears the encoder count to zero, and returns to `IDLE`.
-3. **Fail-Safe Disconnection**: If the sensor wire is broken or disconnected, `GPIO 16` pulls to 0V via pull-down, immediately preventing the carriage from crashing in search of a missing datum.
+1. **Carriage Away from Home (Repouso)**: The NC contact is closed to GND (`gpio == 0`). The firmware interprets this as `CLEAR` / un-triggered.
+2. **Carriage at Home Datum**: The NC contact opens, and the internal pull-up pulls `GPIO 37` to +3.3V (`gpio == 1`). The firmware interprets this as `HOME DETECTED`, engages active braking (`motor_brake`), clears the encoder count to zero, and returns to `IDLE`.
+3. **Fail-Safe Disconnection**: If the sensor wire is broken or disconnected, `GPIO 37` pulls to +3.3V (`gpio == 1`), immediately stopping homing rather than crashing into the mechanical endstop.
 
 ---
 
@@ -128,8 +122,8 @@ A comprehensive hardware pin routing audit was performed against the Espressif E
    - **Verification**: None of the active system signals use these strapping pins, preventing boot mode corruption during startup.
 
 2. **SPI Flash & PSRAM Protection**:
-   - Octal SPI / Quad SPI Flash and PSRAM utilize `GPIO 26` through `GPIO 37`.
-   - **Verification**: All active system pins (`GPIO 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 21, 43, 44`) are fully isolated from the internal SPI memory bus.
+   - Quad SPI Flash utilizes `GPIO 26` through `GPIO 32` (with `GPIO 33–37` only reserved on Octal Flash/PSRAM variants).
+   - **Verification**: All active system pins (`GPIO 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 21, 37, 43, 44`) are isolated from the Quad SPI Flash bus.
 
 3. **Native USB & JTAG Pin Preservation**:
    - Native USB OTG (`GPIO 19` D-, `GPIO 20` D+) and JTAG debugging pins (`GPIO 39–42`) are reserved exclusively by hardware and must not be used for any other peripheral.

@@ -13,15 +13,15 @@ This documentation suite is organized into 5 dedicated technical chapters:
 | **Chapter 1** | [System Overview & Physical Kinematics](01_system_overview_and_physics.md) | Problem statement, lead screw geometry, scale factors ($K_{\text{scale}} = 0.010602875$), EMA velocity filter, and control requirements. |
 | **Chapter 2** | [Hardware Electronics & Electrical Wiring](02_hardware_and_schematics.md) | Complete GPIO pinout table, hardware MOSFET E-stop cutoff gate, MCPWM motor driver interface, and LCD display wiring. |
 | **Chapter 3** | [Dual-Core FreeRTOS Architecture & Kernel IPC](03_software_architecture_freertos.md) | Core 0/1 task pinning, `g_system_mutex` snapshot IPC, C11 `_Atomic` state machine transitions, and task notification flow. |
-| **Chapter 4** | [Industrial Modbus TCP Protocol Specification](04_modbus_rtu_and_communication.md) | WIZ550io (W5500) SPI Ethernet interface, TCP port 502, complete 4-table Modbus register map (Coils, Discrete Inputs, Holding, Input Registers), supervisory SCADA client, and auto-reconnect logic. |
-| **Chapter 5** | [Host-Native Unit & Integration Testing Suite](05_testing_and_hil_simulation.md) | GCC `-DHOST_TEST` simulation architecture, Python `ctypes` binding, and exhaustive breakdown of all 37 pytest test cases. |
+| **Chapter 4** | [Industrial Modbus TCP Protocol Specification](04_modbus_rtu_and_communication.md) | WIZ550io (W5500) SPI Ethernet interface, TCP port 502, complete 4-table Modbus register map (Coils, Discrete Inputs, Holding, Input Registers), supervisory SCADA client (multi-curve open-loop, sine trajectory, themes), and auto-reconnect logic. |
+| **Chapter 5** | [Host-Native Unit & Integration Testing Suite](05_testing_and_hil_simulation.md) | GCC `-DHOST_TEST` simulation architecture, Python `ctypes` binding, and exhaustive breakdown of all 62 pytest test cases. |
 
 ---
 
 ## 🛠️ Quick Start & Build Instructions
 
 ### 1. Host Test Execution (`pytest`)
-To run all 37 host integration tests on your Linux workstation:
+To run all 54 host-native unit and integration tests (with 8 TCP HIL tests skipped when no hardware is attached) on your Linux workstation:
 ```bash
 cd /path/to/controlador_guia_linear
 PYTHONPATH=. tests/.venv/bin/pytest tests/ -v

@@ -48,36 +48,37 @@ This guarantees that `gpio12_emergency_isr` can transition the machine state to 
 
 ## 3. Finite State Machine (FSM)
 
-The system operates across three distinct operational states:
+The system operates across five distinct operational states:
 
 ```
-             ┌──────────────┐
-             │ MACHINE_STATE│
-             │     IDLE     │◄──────────────────────┐
-             └──────┬───────┘                       │
-                    │                               │
-                    │ Start Button Pressed /        │ Target Position Reached /
-                    │ Modbus START Command          │ Modbus STOP Command
-                    ▼                               │
-             ┌──────────────┐                       │
-             │ MACHINE_STATE│───────────────────────┘
-             │    MOVING    │
-             └──────┬───────┘
-                    │
-                    │ Emergency Stop (`GPIO 12`) /
-                    │ Modbus EMERGENCY Command
-                    ▼
-             ┌──────────────┐
-             │ MACHINE_STATE│
+             ┌──────────────┐   HOME / |pos|<=5mm    ┌──────────────────┐
+             │ MACHINE_STATE│◄──────────────────────►│  MACHINE_STATE   │
+             │    HOMING    │                        │ OPEN_LOOP_TEST   │
+             └──────▲───────┘                        └──────────────────┘
+                    │ Modbus HOME (4)                         ▲
+                    │                                         │ Modbus OPEN_LOOP_TEST (5)
+             ┌──────┴───────┐   Start Button Toggle /         │
+             │ MACHINE_STATE│◄──────────────────────►┌────────┴───────┐
+             │     IDLE     │   Modbus START / STOP  │ MACHINE_STATE  │
+             └──────▲───────┘                        │     MOVING     │
+                    │                                └────────┬───────┘
+                    │ Level-Checked RESET (E-Stop Released)   │
+                    │                                         │ E-Stop (GPIO 12 HIGH) /
+             ┌──────┴───────┐                                 │ Modbus EMERGENCY (99)
+             │ MACHINE_STATE│◄────────────────────────────────┘
              │  EMERGENCY   │ (Lockout State: Motor Disabled,
-             └──────────────┘  Requires explicit Level-Checked Reset)
+             └──────────────┘  Requires E-Stop LOW + Explicit Reset)
 ```
 
 ### 3.1 State Transition Rules & Safety Guards
-1. **IDLE $\rightarrow$ MOVING**: Allowed only if no active Emergency condition exists (`gpio_safety_is_emergency_active() == false`).
-2. **MOVING $\rightarrow$ EMERGENCY**: Instantaneous transition. Disables PWM output (`motor_mcpwm_set_effort(0.0)`) and de-asserts motor enable pin (`GPIO 13`).
-3. **EMERGENCY Lockout**: When in `EMERGENCY`, all movement commands (`START` / position updates) are rejected.
-4. **Level-Checked Safe Reset**: Transitioning out of `EMERGENCY` back to `IDLE` via `shared_data_request_state_change(MACHINE_STATE_IDLE)` requires that the physical E-stop button (`GPIO 12`) has been physically released (HIGH level).
+1. **IDLE $\leftrightarrow$ MOVING**: Allowed only if no active Emergency condition exists (`gpio_safety_is_emergency_active() == false`). The physical Start button (`GPIO 11`, 50 ms debounce) toggles between `IDLE` and `MOVING`.
+2. **ANY $\rightarrow$ EMERGENCY**: Instantaneous transition. Disables PWM output (`motor_set_effort(0.0)`) and de-asserts motor enable pin (`GPIO 13`).
+3. **EMERGENCY Lockout**: When in `EMERGENCY`, all movement commands (`START` / `HOME` / `OPEN_LOOP_TEST`) are rejected.
+4. **Level-Checked Safe Reset**: Transitioning out of `EMERGENCY` back to `IDLE` via `shared_data_request_state_change(MACHINE_STATE_IDLE)` requires that the physical E-stop button (`GPIO 12`) has been physically released (`LOW` level in Active-HIGH logic).
+5. **IDLE $\rightarrow$ HOMING**: Drives motor at `-60.0%` effort until `GPIO_HOME_PIN` (`GPIO 37`) goes `HIGH` (`!= 0`), then brakes, zeroes encoder/kinematics, and returns to `IDLE`.
+6. **IDLE $\rightarrow$ OPEN_LOOP_TEST**: Requires `|pos| <= 5.0 mm`. Supports two modes with an 825-sample (8.25 s @ 100 Hz) RAM burst buffer and `7500 ms` safety timeout:
+   - **Active Brake (`mode = 0`)**: Drives at configured `open_loop_pwm` (`1.0%–100.0%`) until `536.0 mm` (80% travel), then applies `motor_brake`.
+   - **Coast-to-Stop (`mode = 1`)**: Drives at `open_loop_pwm` until `open_loop_coast_pos_mm` (`50.0–536.0 mm`, default `400.0 mm`), steps effort to `0.0%` without active braking, and records until natural stop (`|vel| <= 2.0 mm/s` for 150 ms) or endstop guard (`650.0 mm`).
 
 ---
 
@@ -85,7 +86,7 @@ The system operates across three distinct operational states:
 
 | Task Name | Core | Priority | Stack Size | Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
-| `ControlLoopTask` | Core 1 | 10 (Highest) | 4096 Bytes | 100 Hz PID position regulation & motor PWM drive |
-| `IHMDisplayTask` | Core 0 | 5 | 3072 Bytes | 5 Hz LCD display refresh & status LED blinking |
-| `ModbusSlaveTask` | Core 0 | 4 | 4096 Bytes | RS485 UART event processing & Modbus register sync |
-| `StartDebounceTask`| Core 0 | 4 | 2048 Bytes | 50 ms debounced monitoring of physical Start button |
+| `ControlLoopTask` | Core 1 | 10 (Highest) | 4096 Bytes | 100 Hz PID / Open-Loop / Homing regulation & motor MCPWM drive |
+| `IHMDisplayTask` | Core 0 | 5 | 3072 Bytes | 10 Hz LCD display refresh & status LED blinking |
+| `ModbusSlaveTask` | Core 0 | 4 | 4096 Bytes | Modbus TCP (W5500 Ethernet) event processing & register sync |
+| `StartDebounceTask`| Core 0 | 4 | 2048 Bytes | 50 ms debounced monitoring of physical Start button (`IDLE <-> MOVING` toggle) |
