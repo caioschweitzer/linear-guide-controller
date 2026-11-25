@@ -16,6 +16,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#define IHM_I2C_TIMEOUT_MS         10
+#define IHM_RECONNECT_INTERVAL_MS  2000
+
 static const char *TAG = "IHM_DISPLAY";
 #endif
 
@@ -120,35 +123,96 @@ bool ihm_update_led(ihm_display_t *ihm, machine_state_t state,
 #ifndef HOST_TEST
 static esp_err_t pcf8574_write_byte(ihm_display_t *ihm, uint8_t data) {
   if (!ihm || !ihm->i2c_dev_handle)
-    return ESP_FAIL;
+    return ESP_ERR_INVALID_STATE;
   i2c_master_dev_handle_t dev = (i2c_master_dev_handle_t)ihm->i2c_dev_handle;
-  return i2c_master_transmit(dev, &data, 1, 50);
+  return i2c_master_transmit(dev, &data, 1, IHM_I2C_TIMEOUT_MS);
 }
 
-static void lcd_strobe(ihm_display_t *ihm, uint8_t data) {
-  pcf8574_write_byte(ihm, data | LCD_EN);
+static esp_err_t lcd_strobe(ihm_display_t *ihm, uint8_t data) {
+  esp_err_t err = pcf8574_write_byte(ihm, data | LCD_EN);
+  if (err != ESP_OK)
+    return err;
   esp_rom_delay_us(10); // Enforce EN pulse width (> 450 ns HD44780 requirement)
-  pcf8574_write_byte(ihm, data & ~LCD_EN);
+  err = pcf8574_write_byte(ihm, data & ~LCD_EN);
+  if (err != ESP_OK)
+    return err;
   esp_rom_delay_us(50); // Enforce data hold & execution time (> 37 us HD44780 spec)
+  return ESP_OK;
 }
 
-static void lcd_write_nibble(ihm_display_t *ihm, uint8_t nibble, uint8_t rs) {
+static esp_err_t lcd_write_nibble(ihm_display_t *ihm, uint8_t nibble, uint8_t rs) {
   uint8_t data = (nibble & 0xF0) | rs | LCD_BL;
-  pcf8574_write_byte(ihm, data);
-  lcd_strobe(ihm, data);
+  esp_err_t err = pcf8574_write_byte(ihm, data);
+  if (err != ESP_OK)
+    return err;
+  return lcd_strobe(ihm, data);
 }
 
-static void lcd_send_cmd(ihm_display_t *ihm, uint8_t cmd) {
-  lcd_write_nibble(ihm, cmd & 0xF0, 0);
-  lcd_write_nibble(ihm, (cmd << 4) & 0xF0, 0);
+static esp_err_t lcd_send_cmd(ihm_display_t *ihm, uint8_t cmd) {
+  esp_err_t err = lcd_write_nibble(ihm, cmd & 0xF0, 0);
+  if (err != ESP_OK)
+    return err;
+  err = lcd_write_nibble(ihm, (cmd << 4) & 0xF0, 0);
+  if (err != ESP_OK)
+    return err;
   if (cmd == 0x01 || cmd == 0x02) {
     vTaskDelay(pdMS_TO_TICKS(3)); // Clear display / Return home require > 1.52 ms
   }
+  return ESP_OK;
 }
 
-static void lcd_send_data(ihm_display_t *ihm, uint8_t data) {
-  lcd_write_nibble(ihm, data & 0xF0, LCD_RS);
-  lcd_write_nibble(ihm, (data << 4) & 0xF0, LCD_RS);
+static esp_err_t lcd_send_data(ihm_display_t *ihm, uint8_t data) {
+  esp_err_t err = lcd_write_nibble(ihm, data & 0xF0, LCD_RS);
+  if (err != ESP_OK)
+    return err;
+  return lcd_write_nibble(ihm, (data << 4) & 0xF0, LCD_RS);
+}
+
+static esp_err_t lcd_init_sequence(ihm_display_t *ihm) {
+  vTaskDelay(pdMS_TO_TICKS(50)); // HD44780 Power-On Initialization delay (> 15 ms)
+
+  // Initialize LCD in 4-bit mode (HD44780 init sequence)
+  esp_err_t err = lcd_write_nibble(ihm, 0x30, 0);
+  if (err != ESP_OK)
+    return err;
+  vTaskDelay(pdMS_TO_TICKS(5)); // > 4.1 ms delay
+
+  err = lcd_write_nibble(ihm, 0x30, 0);
+  if (err != ESP_OK)
+    return err;
+  esp_rom_delay_us(150);
+
+  err = lcd_write_nibble(ihm, 0x30, 0);
+  if (err != ESP_OK)
+    return err;
+  esp_rom_delay_us(150);
+
+  err = lcd_write_nibble(ihm, 0x20, 0); // Set 4-bit mode
+  if (err != ESP_OK)
+    return err;
+  esp_rom_delay_us(150);
+
+  err = lcd_send_cmd(ihm, 0x28); // 2 lines, 5x8 font
+  if (err != ESP_OK)
+    return err;
+  err = lcd_send_cmd(ihm, 0x0C); // Display ON, Cursor OFF
+  if (err != ESP_OK)
+    return err;
+  err = lcd_send_cmd(ihm, 0x01); // Clear Display
+  if (err != ESP_OK)
+    return err;
+  err = lcd_send_cmd(ihm, 0x06); // Entry Mode Set
+  return err;
+}
+
+static void lcd_handle_i2c_error(ihm_display_t *ihm, esp_err_t err) {
+  ESP_LOGW(TAG, "I2C LCD error (%s), resetting bus", esp_err_to_name(err));
+  if (ihm->i2c_bus_handle) {
+    i2c_master_bus_reset((i2c_master_bus_handle_t)ihm->i2c_bus_handle);
+  }
+  ihm->is_connected = false;
+  ihm->last_line1[0] = '\0';
+  ihm->last_line2[0] = '\0';
 }
 #endif
 
@@ -211,27 +275,16 @@ void ihm_init(ihm_display_t *ihm, const ihm_config_t *config) {
         ESP_OK) {
       ihm->i2c_dev_handle = (void *)dev_handle;
 
-      esp_rom_delay_us(50000); // HD44780 Power-On Initialization delay (> 15 ms)
-
-      // Initialize LCD in 4-bit mode (HD44780 init sequence)
-      lcd_write_nibble(ihm, 0x30, 0);
-      esp_rom_delay_us(5000); // > 4.1 ms delay
-      lcd_write_nibble(ihm, 0x30, 0);
-      esp_rom_delay_us(150);
-      lcd_write_nibble(ihm, 0x30, 0);
-      esp_rom_delay_us(150);
-      lcd_write_nibble(ihm, 0x20, 0); // Set 4-bit mode
-      esp_rom_delay_us(150);
-
-      lcd_send_cmd(ihm, 0x28); // 2 lines, 5x8 font
-      lcd_send_cmd(ihm, 0x0C); // Display ON, Cursor OFF
-      lcd_send_cmd(ihm, 0x01); // Clear Display
-      esp_rom_delay_us(3000);
-      lcd_send_cmd(ihm, 0x06); // Entry Mode Set
-
-      ihm->is_connected = true;
-      ESP_LOGI(TAG, "IHM LCD I2C connected successfully at 0x%02X",
-               ihm->config.i2c_address);
+      if (i2c_master_probe(bus_handle, ihm->config.i2c_address,
+                           IHM_I2C_TIMEOUT_MS) == ESP_OK &&
+          lcd_init_sequence(ihm) == ESP_OK) {
+        ihm->is_connected = true;
+        ESP_LOGI(TAG, "IHM LCD I2C connected successfully at 0x%02X",
+                 ihm->config.i2c_address);
+      } else {
+        ESP_LOGW(TAG, "IHM LCD not detected at 0x%02X, will retry",
+                 ihm->config.i2c_address);
+      }
     }
   }
 #else
@@ -249,15 +302,31 @@ bool ihm_write_lcd(ihm_display_t *ihm, const char *line1, const char *line2) {
 
 #ifndef HOST_TEST
   // Set cursor to Row 0, Col 0
-  lcd_send_cmd(ihm, 0x80);
+  esp_err_t err = lcd_send_cmd(ihm, 0x80);
+  if (err != ESP_OK) {
+    lcd_handle_i2c_error(ihm, err);
+    return false;
+  }
   for (int i = 0; i < 16 && line1[i] != '\0'; i++) {
-    lcd_send_data(ihm, (uint8_t)line1[i]);
+    err = lcd_send_data(ihm, (uint8_t)line1[i]);
+    if (err != ESP_OK) {
+      lcd_handle_i2c_error(ihm, err);
+      return false;
+    }
   }
 
   // Set cursor to Row 1, Col 0
-  lcd_send_cmd(ihm, 0xC0);
+  err = lcd_send_cmd(ihm, 0xC0);
+  if (err != ESP_OK) {
+    lcd_handle_i2c_error(ihm, err);
+    return false;
+  }
   for (int i = 0; i < 16 && line2[i] != '\0'; i++) {
-    lcd_send_data(ihm, (uint8_t)line2[i]);
+    err = lcd_send_data(ihm, (uint8_t)line2[i]);
+    if (err != ESP_OK) {
+      lcd_handle_i2c_error(ihm, err);
+      return false;
+    }
   }
 #endif
 
@@ -275,9 +344,37 @@ void ihm_update(ihm_display_t *ihm, float position_mm, float velocity_mm_s,
   ihm_format_lines(position_mm, velocity_mm_s, state, line1, line2);
   ihm_update_led(ihm, state, current_time_ms);
 
-  // Update display at smooth 2 Hz (500 ms period)
+#ifndef HOST_TEST
+  if (!ihm->is_connected && ihm->i2c_bus_handle && ihm->i2c_dev_handle &&
+      (current_time_ms - ihm->last_reconnect_attempt_ms >=
+       IHM_RECONNECT_INTERVAL_MS)) {
+    ihm->last_reconnect_attempt_ms = current_time_ms;
+    i2c_master_bus_handle_t bus =
+        (i2c_master_bus_handle_t)ihm->i2c_bus_handle;
+    if (i2c_master_probe(bus, ihm->config.i2c_address, IHM_I2C_TIMEOUT_MS) ==
+            ESP_OK &&
+        lcd_init_sequence(ihm) == ESP_OK) {
+      ihm->is_connected = true;
+      ihm->last_line1[0] = '\0';
+      ihm->last_line2[0] = '\0';
+      ESP_LOGI(TAG, "IHM LCD I2C reconnected at 0x%02X",
+               ihm->config.i2c_address);
+    } else {
+      i2c_master_bus_reset(bus);
+    }
+  }
+#endif
+
+  // Update display at smooth 2 Hz (500 ms period), only when text changed
   if (current_time_ms - ihm->last_lcd_update_ms >= 500) {
+    if (strncmp(line1, ihm->last_line1, 16) == 0 &&
+        strncmp(line2, ihm->last_line2, 16) == 0) {
+      ihm->last_lcd_update_ms = current_time_ms;
+      return;
+    }
     if (ihm_write_lcd(ihm, line1, line2)) {
+      memcpy(ihm->last_line1, line1, 17);
+      memcpy(ihm->last_line2, line2, 17);
       ihm->last_lcd_update_ms = current_time_ms;
     }
   }
